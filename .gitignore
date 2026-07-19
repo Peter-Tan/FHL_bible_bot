@@ -1,0 +1,45 @@
+# ── Secrets — NEVER commit ───────────────────────────────────
+.env
+*.key
+
+# ── User data — real conversations live here ─────────────────
+logs/
+
+# ── Python ───────────────────────────────────────────────────
+.venv/
+__pycache__/
+*.pyc
+scripts/output/
+
+# ── Frontend ─────────────────────────────────────────────────
+web/node_modules/
+web/dist/
+*.tsbuildinfo
+
+# ── Unrelated gemma4-nlp project files (local-only legacy) ───
+pyproject.toml
+uv.lock
+gemma4_e4b_model/
+SETUP.md
+scripts/local_llm_setup/
+data/
+
+# ── Personal working notes — local only, not for the repo ────
+*.txt
+!requirements.txt
+env_setup_txt
+https._setup.txt
+FRONTEND_MIGRATION_PLAN.md
+
+# ── e2e artifacts ────────────────────────────────────────────
+e2e/*.png
+e2e/*.json
+
+# ── OS / IDE / tooling ───────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+.claude/
+.git_old/

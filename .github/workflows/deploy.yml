@@ -1,0 +1,35 @@
+name: Deploy to tech.fhl.net
+
+# Manual trigger for now — press "Run workflow" in the Actions tab.
+# Requires three repo secrets (Settings → Secrets → Actions):
+#   SSH_HOST, SSH_USER, SSH_PRIVATE_KEY
+# When ready for auto-deploy on every merge, replace the trigger with:
+#   on:
+#     push:
+#       branches: [main]
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd /home/fhl/peter/fhl_bible_tool/FHL_bible_tool_bot-main
+            git pull origin main
+            .venv/bin/pip install -q -r requirements.txt
+            cd web && npm ci --silent && npm run build && cd ..
+            # New-UI stack (FastAPI + React on 7861). The legacy Gradio
+            # service (fhl-bible-bot, port 7860) is deliberately untouched.
+            systemctl --user restart fhl-bible-ui.service
+            sleep 3
+            curl -sf http://127.0.0.1:7861/bible_bot/api/health
+            node e2e/verify-smoke.mjs
+            echo "Deployed at $(date)"

@@ -114,8 +114,8 @@ cd web && npm run build                         # 前端變更後（不需重啟
 
 - `e2e/verify-smoke.mjs` — 免費、不呼叫 LLM：health、session cookie、對話 CRUD、usage endpoint 格式、輸入驗證、SPA bundle。**每次 commit 前必跑。**
 - `e2e/verify-chat.mjs` — 一次真實串流查詢（約 US$0.02–0.05）：SSE 契約、回答中的經文連結、用量記錄遞增。正式部署與任何 RAG 引擎變更前必跑。
-- GitHub Actions `ci.yml` — 每次 push/PR 執行前端 typecheck＋build 與 Python compile 檢查。
-- GitHub Actions `deploy.yml` — 手動觸發的 SSH 部署（需設定 repo secrets；見 workflow 檔案內說明）。
+- GitHub Actions `ci.yml` — 每次 push/PR 執行前端 typecheck＋build 與 Python compile 檢查（不需任何 secrets）。
+- 部署：直接在伺服器上（VS Code Remote-SSH）執行 `./deploy.sh` — 拉最新程式碼、rebuild 前端、重啟服務、跑 smoke 測試。刻意**不**做 GitHub Actions 自動部署，避免把伺服器 SSH 私鑰放上 GitHub。
 
 完整的上線前檢查表（哪種變更要跑哪些測試）見 [CODEBASE.md → 測試與發佈檢查表](CODEBASE.md#測試與發佈檢查表)。
 

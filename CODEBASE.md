@@ -34,7 +34,7 @@
 | `logs/` | **執行期資料，已 gitignore**：`chat.db`（SQLite）＋舊版 JSON 備份。 |
 | `.env` | **密鑰，已 gitignore**：`ANTHROPIC_API_KEY`、可選 `FHL_V4_MODEL_ID`。 |
 | `nginx-bible_bot-snippet.conf` | 交給伺服器管理員貼進 nginx 的 location 區塊。 |
-| `.github/workflows/` | `ci.yml`（建置檢查）與 `deploy.yml`（手動 SSH 部署）。 |
+| `.github/workflows/` | `ci.yml`（建置檢查；不需 secrets）。部署一律在伺服器上執行 `./deploy.sh`。 |
 
 引擎版本管理慣例：**永不修改舊版** — 複製為 `_vN+1.py`、改複本、再切換
 `server/chat.py` 的 import。回滾＝把 import 換回去。
@@ -322,16 +322,18 @@ lucide-react 圖示。建置為靜態檔（`npm run build` = `tsc -b && vite bui
 | 定價常數 | smoke e2e＋一次 chat e2e，然後核對 用量統計 數字 |
 | DB schema | 先寫好遷移路徑（新資料表自動建立；既有資料表加**欄位**需 `ALTER TABLE`）、備份 `logs/chat.db`、再跑 smoke e2e |
 
-### CI（GitHub Actions）
+### CI（GitHub Actions）與部署方式
 
 - `ci.yml` — 每次 push/PR：前端 `npm ci && npm run build`（含 `tsc`）、
   後端 `python -m compileall server scripts`。CI **刻意不 import、不呼叫
   LLM**：import 引擎會連網抓 FHL 書卷表，chat 測試要花錢 —
-  這些改在伺服器上用 e2e 腳本跑。
-- `deploy.yml` — 手動觸發（`workflow_dispatch`）：SSH 進伺服器、
-  `git pull`、重建前端、重啟 `fhl-bible-ui.service`、curl health。
-  需要 repo secrets `SSH_HOST`／`SSH_USER`／`SSH_PRIVATE_KEY`。
-  準備好自動部署時，把 trigger 改成 `push: branches: [main]`。
+  這些改在伺服器上用 e2e 腳本跑。`ci.yml` 只在 GitHub 的 runner 上
+  建置程式碼，**不需要任何 repo secrets**。
+- **部署不走 GitHub Actions** — 這是刻意的安全決策：自動部署需要把能
+  登入 tech.fhl.net 的 SSH 私鑰存成 GitHub secrets，等於讓 GitHub 帳號
+  成為進入伺服器的途徑（帳號被盜或惡意 workflow 變更即可觸及主機）。
+  開發本來就透過 VS Code Remote-SSH 在伺服器上進行，部署只是
+  rebuild＋restart，在伺服器上執行 `./deploy.sh` 即可，不需額外憑證。
 
 ### 提交規範
 

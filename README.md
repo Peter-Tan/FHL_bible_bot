@@ -29,7 +29,7 @@
 FastAPI（server/）── SQLite logs/chat.db（users/conversations/messages/feedback/usage_log）
    │  bible_query()
    ▼
-RAG 引擎（scripts/claude_bible_rag_v4.py）
+RAG 引擎（scripts/claude_bible_rag_v5.py）
    │  Anthropic Messages API（tool_use 迴圈、prompt caching、串流）
    ▼                              ▲
 Claude Sonnet 5 ──工具呼叫──▶  fhl_tools.py（13 個工具）
@@ -92,8 +92,8 @@ cd web && npm run build                         # 前端變更後（不需重啟
 | Token 定價（成本估算） | `server/chat.py` → `PRICE_PER_MTOK_*` | Sonnet 5 intro→standard 依日期切換 |
 | 經文連結新版 endpoint | `web/src/lib/verseLinks.ts` → `VUI_BIBLE_BASE` | `https://tech.fhl.net/vui/#/bible/` |
 | 經文連結預設模式 | `web/src/lib/verseLinks.ts` → `DEFAULT_VERSE_LINK_MODE` | `"traditional"` |
-| 回答風格指令 | `scripts/claude_bible_rag_v4.py` → `STYLE_INSTRUCTIONS` | 簡潔 |
-| System prompt／工具規則 | `scripts/claude_bible_rag_v4.py` → `BIBLE_SYSTEM_PROMPT` | — |
+| 回答風格指令 | `scripts/claude_bible_rag_v5.py` → `STYLE_INSTRUCTIONS` | 簡潔 |
+| System prompt／工具規則 | `scripts/claude_bible_rag_v5.py` → `BIBLE_SYSTEM_PROMPT` | — |
 
 ## 確定性 vs 機率性（Deterministic vs Probabilistic）
 
@@ -124,7 +124,8 @@ cd web && npm run build                         # 前端變更後（不需重啟
 | 路徑 | 內容 |
 |---|---|
 | `server/` | FastAPI 後端：會話、聊天 SSE、SQLite 層 |
-| `scripts/claude_bible_rag_v4.py` | 現行 RAG 引擎（v1–v3 保留為回滾備份） |
+| `scripts/claude_bible_rag_v5.py` | 現行 RAG 引擎（v1–v4 保留為回滾備份） |
+| `scripts/zh_hant.py` | 回答的簡體→繁體字元表後處理 |
 | `scripts/fhl_tools.py` | 13 個 FHL API 工具 |
 | `scripts/app.py` | 舊版 Gradio 應用（舊正式環境，跑 v3、port 7860） |
 | `web/` | React + Vite + Tailwind SPA |

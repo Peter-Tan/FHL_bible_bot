@@ -15,9 +15,11 @@ from pydantic import BaseModel
 from . import db
 
 # The RAG engine lives in scripts/ and is imported unchanged.
-# v4 = Sonnet 5 + style parameter (v3 stays with the production Gradio app).
+# v5 = v4 (Sonnet 5 + style parameter) plus simplified→繁體 cleanup of the
+# final answer. Rollback: switch this import back to claude_bible_rag_v4.
+# (v3 stays with the production Gradio app.)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-from claude_bible_rag_v4 import STYLE_INSTRUCTIONS, bible_query  # noqa: E402
+from claude_bible_rag_v5 import STYLE_INSTRUCTIONS, bible_query  # noqa: E402
 from fhl_tools import ALL_TOOLS  # noqa: E402
 
 router = APIRouter(prefix="/api")

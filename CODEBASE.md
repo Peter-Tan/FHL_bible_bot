@@ -24,10 +24,14 @@
 | 路徑 | 角色 |
 |---|---|
 | `server/` | FastAPI 後端（新 UI）。會話、聊天 SSE、用量、SQLite。 |
-| `scripts/claude_bible_rag_v4.py` | **現行** RAG 引擎（Sonnet 5、風格參數、用量回報）。 |
-| `scripts/claude_bible_rag_v3.py` | 前一版引擎 — 舊版 Gradio 應用仍在使用。**不可修改。** |
+| `scripts/claude_bible_rag_v5.py` | **現行** RAG 引擎（Sonnet 5、風格參數、用量回報、簡體字清理）。 |
+| `scripts/claude_bible_rag_v4.py` | 前一版引擎，保留為回滾備份。**不可修改。** |
+| `scripts/claude_bible_rag_v3.py` | 更前一版 — 舊版 Gradio 應用仍在使用。**不可修改。** |
 | `scripts/claude_bible_rag.py`、`_v2.py` | 更早的引擎，保留為回滾備份。**不可修改。** |
 | `scripts/fhl_tools.py` | 13 個 FHL API 工具（各版引擎共用）。 |
+| `scripts/zh_hant.py` | 簡體→繁體字元表（2,475 筆）＋ `to_traditional()`。 |
+| `scripts/gen_zh_hant_table.py` | 重建上述字元表（手動執行，需 OpenCC）。 |
+| `scripts/test_zh_hant.py` | 字元表的回歸測試（`.venv/bin/python scripts/test_zh_hant.py`）。 |
 | `scripts/app.py` | 舊版 Gradio 應用（舊正式環境、port 7860、import v3）。 |
 | `web/` | React 18 + Vite + Tailwind SPA（TypeScript）。 |
 | `e2e/` | 端對端驗證腳本（Node，無額外相依）。 |
@@ -92,7 +96,7 @@
 
 ## RAG 引擎 — `scripts/`
 
-### `claude_bible_rag_v4.py` — 現行引擎
+### `claude_bible_rag_v5.py` — 現行引擎
 
 關鍵常數（檔案開頭）：`MODEL_ID`（預設 `claude-sonnet-5`，可用環境變數
 `FHL_V4_MODEL_ID` 覆寫 — 刻意與 v3 的 `FHL_MODEL_ID` 分開）、
@@ -109,7 +113,8 @@ style, usage_out) -> str`** — agentic 迴圈：
    `stop_reason == "tool_use"`，**在 Python 端**執行被要求的工具
    （未知工具名或壞參數會變成 error tool-result，不會 crash），
    附上 rolling cache 斷點後進下一輪。
-3. 得到最終回答後：以 `_linkify_all()` 後處理並回傳。
+3. 得到最終回答後：以 `_postprocess_answer()` 後處理並回傳
+   （簡體→繁體 → 經文連結 → Strong's 連結）。
 4. `usage_out`（可選 dict）：**每一輪** API 之後就地更新累計的
    `uncached_in / out / cache_read / cache_write / model` —
    即使後面某輪拋例外，累計值也保得住。這是用量記帳的資料來源。
@@ -125,6 +130,41 @@ style, usage_out) -> str`** — agentic 迴圈：
 
 因此連結永遠不可能指到 regex＋書卷表沒組出的地方。殘餘的（機率性）風險是
 **漏連結** — 模型若寫出 regex 不認得的引用格式，該段文字就單純不加連結。
+
+### `zh_hant.py` — 簡體字清理（v5 新增）
+
+system prompt 已經要求「Output language: 繁體中文 (zh-tw)」，但清查
+`logs/chat.db`（2026-04-30 ～ 2026-08-13）發現 **288 篇回答中有 8 篇**
+（約 2.8%）在整體正確的繁體句子裡夾雜簡體字 —「核心问题」「强调」
+「①银子作为在众人眼前证明」— 集中在較長的原文分析回答（其中一篇甚至
+夾了俄文「инфинитив绝对式」）。純靠 prompt 措辭壓不住，因此改用確定性後處理。
+
+**為什麼不直接用 OpenCC。** 拿同樣 288 篇回答實測：
+
+| 方式 | 被改動的回答 | 問題 |
+|---|---|---|
+| OpenCC `s2t` | 114 / 288 | 吃→喫（116 次）、群→羣（63）、才→纔（29）、里→裏、台→臺 |
+| OpenCC `s2twp` | 168 / 288 | 再加上詞彙置換（對象→物件、信息→資訊）與整字刪除 |
+| `zh_hant`（本模組） | **8 / 288** | 只改真正的簡體字 |
+
+對一個逐字引用和合本的工具來說，為了修 8 篇而破壞 114 篇不划算。
+
+**做法：**純字元表 `str.translate`，收錄條件為
+（1）Big5 編不出來、（2）OpenCC `t2s` 不會改動它（排除 Big5 以外的繁體
+異體字 — 裏／麽／衆，和合本兩種寫法都用，改了等於竄改經文）、
+（3）OpenCC `s2tw` 恰好對應到另一個字。用 `s2tw` 而非 `s2t`，才會得到
+台灣用字（为→**為**、众→**眾**、启→**啟**）。`祢` 在產生器的 KEEP 名單裡
+（「願祢的旨意成就」的敬語，不是簡體字）。
+
+**成本：**目前最長的一篇回答（10,149 字）0.9 ms，且發生在串流結束之後的
+worker thread — 不影響首字延遲與串流速度。
+
+**已知限制：**表中有 121 個字理論上一對多（发→發／髮、别→別／彆），
+字元表一律取常用形；四個月的實際流量沒出現過。若真的出現，正解是對該段
+做詞彙感知轉換，而不是把表放寬。
+
+表由 `gen_zh_hant_table.py` 產生並直接 commit（伺服器執行期不需要 OpenCC
+相依）；`test_zh_hant.py` 會拿整個 `chat.db` 做回歸，確認「只改那 8 篇」。
 
 Sonnet 5 注意事項：`temperature/top_p/top_k` 參數收下但忽略（模型會拒絕
 非預設值）；adaptive thinking 預設啟用（未設 `thinking` 參數）；
@@ -153,8 +193,8 @@ schema，所以 **docstring 的措辭就是 prompt engineering** — 它會改�
 
 ### 舊版引擎
 `claude_bible_rag_v3.py` 供仍在運行的 Gradio 應用（`app.py`、port 7860、
-經 `FHL_MODEL_ID` 使用 Opus 4.7）。v1/v2 是回滾備份。新架構完全不 import
-這些檔案 — `server/chat.py` **只 import v4**。
+經 `FHL_MODEL_ID` 使用 Opus 4.7）。v1/v2/v4 是回滾備份。新架構完全不 import
+這些檔案 — `server/chat.py` **只 import v5**。
 
 ---
 
@@ -195,7 +235,7 @@ lucide-react 圖示。建置為靜態檔（`npm run build` = `tsc -b && vite bui
      fhl_tools.* 執行 HTTP 呼叫、回傳 JSON                      [確定性]
      每次呼叫發一個 tool_log SSE 事件 → UI 🔧 記錄              [確定性]
    最後一輪串流 text_delta 事件                                 [文字內容：機率性]
-4. _linkify_all() 加上經文＋Strong's 連結                       [確定性]
+4. _postprocess_answer() 簡體→繁體、加經文＋Strong's 連結       [確定性]
 5. db.append_turn() 存檔；_log_usage() 依 API usage 欄位
    記錄 token 與成本                                            [確定性]
 6. SSE `done` 帶回含連結的最終回答；UI 替換顯示                 [確定性]
@@ -216,8 +256,9 @@ lucide-react 圖示。建置為靜態檔（`npm run build` = `tsc -b && vite bui
 | 行為 | 位置 |
 |---|---|
 | 13 個工具實作（HTTP、解析、裁切） | `scripts/fhl_tools.py` |
-| 工具分派、未知工具／壞參數錯誤處理、輪數上限（10） | `claude_bible_rag_v4.py` 迴圈 |
-| 經文與 Strong's 連結組建（regex＋書卷表；LLM 從不寫 URL） | v4 的 `linkify_*` |
+| 工具分派、未知工具／壞參數錯誤處理、輪數上限（10） | `claude_bible_rag_v5.py` 迴圈 |
+| 經文與 Strong's 連結組建（regex＋書卷表；LLM 從不寫 URL） | v5 的 `linkify_*` |
+| 簡體字轉繁體（字元表，非 OpenCC） | `scripts/zh_hant.py` |
 | 傳統版/新版 href 改寫＋節錨點 | `web/src/lib/verseLinks.ts` |
 | 會話身分、cookie 處理、使用者隔離 | `server/sessions.py` |
 | 輸入驗證（空訊息/風格/擁有權/429）— 在任何 LLM 費用之前 | `server/chat.py` |
@@ -287,9 +328,9 @@ lucide-react 圖示。建置為靜態檔（`npm run build` = `tsc -b && vite bui
 | `FHL_V4_MODEL_ID` | `.env` | 新 UI 的模型（預設 `claude-sonnet-5`）。v3/Gradio 用的是另一個 `FHL_MODEL_ID`。 |
 | `FHL_MAX_CONCURRENT` | service 環境變數 | 並行查詢上限（預設 10，超過回 429）。 |
 | `PRICE_PER_MTOK_INTRO/STANDARD`、`SONNET5_INTRO_UNTIL` | `server/chat.py` | 成本估算。 |
-| `MAX_TOOL_ROUNDS` | `claude_bible_rag_v4.py` | Agentic 輪數硬上限。 |
-| `BIBLE_SYSTEM_PROMPT`、`STYLE_INSTRUCTIONS` | `claude_bible_rag_v4.py` | 最主要的機率性調整桿。 |
-| `FHL_READ_URL`、`LINK_VERSION` | `claude_bible_rag_v4.py` | 傳統版連結目標（會存進回答）。 |
+| `MAX_TOOL_ROUNDS` | `claude_bible_rag_v5.py` | Agentic 輪數硬上限。 |
+| `BIBLE_SYSTEM_PROMPT`、`STYLE_INSTRUCTIONS` | `claude_bible_rag_v5.py` | 最主要的機率性調整桿。 |
+| `FHL_READ_URL`、`LINK_VERSION` | `claude_bible_rag_v5.py` | 傳統版連結目標（會存進回答）。 |
 | `DEFAULT_VERSE_LINK_MODE`、`VUI_BIBLE_BASE` | `web/src/lib/verseLinks.ts` | 新版連結 endpoint＋預設模式（僅渲染時）。 |
 | Cookie 名稱／效期 | `server/sessions.py` | 會話身分。 |
 
@@ -317,7 +358,8 @@ lucide-react 圖示。建置為靜態檔（`npm run build` = `tsc -b && vite bui
 |---|---|
 | 只動 `web/src` | build＋smoke e2e＋瀏覽器硬重整檢查 |
 | `server/*` | compileall＋smoke e2e＋**重啟服務**＋chat e2e |
-| `claude_bible_rag_v4.py` 的 prompt/工具/docstring | 以上全部**加上**抽樣回答比較（機率性變更 — 用 3–5 個代表性問題前後對比工具鏈與回答品質；參考當初 Sonnet 5 切換的 A/B 做法） |
+| `claude_bible_rag_v5.py` 的 prompt/工具/docstring | 以上全部**加上**抽樣回答比較（機率性變更 — 用 3–5 個代表性問題前後對比工具鏈與回答品質；參考當初 Sonnet 5 切換的 A/B 做法） |
+| `zh_hant.py` 字元表 | `.venv/bin/python scripts/test_zh_hant.py`（會拿 `logs/chat.db` 全部訊息做回歸） |
 | 換模型（`FHL_V4_MODEL_ID`） | 同 prompt 變更＋更新定價常數 |
 | 定價常數 | smoke e2e＋一次 chat e2e，然後核對 用量統計 數字 |
 | DB schema | 先寫好遷移路徑（新資料表自動建立；既有資料表加**欄位**需 `ALTER TABLE`）、備份 `logs/chat.db`、再跑 smoke e2e |

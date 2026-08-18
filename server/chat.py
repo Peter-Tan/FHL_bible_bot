@@ -14,12 +14,12 @@ from pydantic import BaseModel
 
 from . import db
 
-# The RAG engine lives in scripts/ and is imported unchanged.
-# v5 = v4 (Sonnet 5 + style parameter) plus simplified→繁體 cleanup of the
-# final answer. Rollback: switch this import back to claude_bible_rag_v4.
-# (v3 stays with the production Gradio app.)
+# v6 = v5 (Sonnet 5 + style + 繁體 cleanup) plus output-length tuning:
+# step-6 "relevant data", selective verse quoting, concrete brief shape,
+# no interim narration. Rollback: switch this import back to
+# claude_bible_rag_v5. (v3 stays with the production Gradio app.)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-from claude_bible_rag_v5 import STYLE_INSTRUCTIONS, bible_query  # noqa: E402
+from claude_bible_rag_v6 import STYLE_INSTRUCTIONS, bible_query  # noqa: E402
 from fhl_tools import ALL_TOOLS  # noqa: E402
 
 router = APIRouter(prefix="/api")

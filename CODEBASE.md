@@ -24,8 +24,9 @@
 | 路徑 | 角色 |
 |---|---|
 | `server/` | FastAPI 後端（新 UI）。會話、聊天 SSE、用量、SQLite。 |
-| `scripts/claude_bible_rag_v5.py` | **現行** RAG 引擎（Sonnet 5、風格參數、用量回報、簡體字清理）。 |
-| `scripts/claude_bible_rag_v4.py` | 前一版引擎，保留為回滾備份。**不可修改。** |
+| `scripts/claude_bible_rag_v6.py` | **現行** RAG 引擎（v5 + 輸出/輸入調校：step-6 relevant data、選擇性引用經文、brief 具體格式、不做工具前敘述、不重複抓取搜尋結果經文、commentary 限最相關 2-4 節、優先 query_verse_citation 取代整章拉取）。 |
+| `scripts/claude_bible_rag_v5.py` | 前一版引擎，保留為回滾備份。**不可修改。** |
+| `scripts/claude_bible_rag_v4.py` | 更早版本引擎，保留為回滾備份。**不可修改。** |
 | `scripts/claude_bible_rag_v3.py` | 更前一版 — 舊版 Gradio 應用仍在使用。**不可修改。** |
 | `scripts/claude_bible_rag.py`、`_v2.py` | 更早的引擎，保留為回滾備份。**不可修改。** |
 | `scripts/fhl_tools.py` | 13 個 FHL API 工具（各版引擎共用）。 |
@@ -96,7 +97,7 @@
 
 ## RAG 引擎 — `scripts/`
 
-### `claude_bible_rag_v5.py` — 現行引擎
+### `claude_bible_rag_v6.py` — 現行引擎（結構同 v5，僅 prompt 調整）
 
 關鍵常數（檔案開頭）：`MODEL_ID`（預設 `claude-sonnet-5`，可用環境變數
 `FHL_V4_MODEL_ID` 覆寫 — 刻意與 v3 的 `FHL_MODEL_ID` 分開）、
@@ -256,7 +257,7 @@ lucide-react 圖示。建置為靜態檔（`npm run build` = `tsc -b && vite bui
 | 行為 | 位置 |
 |---|---|
 | 13 個工具實作（HTTP、解析、裁切） | `scripts/fhl_tools.py` |
-| 工具分派、未知工具／壞參數錯誤處理、輪數上限（10） | `claude_bible_rag_v5.py` 迴圈 |
+| 工具分派、未知工具／壞參數錯誤處理、輪數上限（10） | `claude_bible_rag_v6.py` 迴圈 |
 | 經文與 Strong's 連結組建（regex＋書卷表；LLM 從不寫 URL） | v5 的 `linkify_*` |
 | 簡體字轉繁體（字元表，非 OpenCC） | `scripts/zh_hant.py` |
 | 傳統版/新版 href 改寫＋節錨點 | `web/src/lib/verseLinks.ts` |
@@ -328,9 +329,9 @@ lucide-react 圖示。建置為靜態檔（`npm run build` = `tsc -b && vite bui
 | `FHL_V4_MODEL_ID` | `.env` | 新 UI 的模型（預設 `claude-sonnet-5`）。v3/Gradio 用的是另一個 `FHL_MODEL_ID`。 |
 | `FHL_MAX_CONCURRENT` | service 環境變數 | 並行查詢上限（預設 10，超過回 429）。 |
 | `PRICE_PER_MTOK_INTRO/STANDARD`、`SONNET5_INTRO_UNTIL` | `server/chat.py` | 成本估算。 |
-| `MAX_TOOL_ROUNDS` | `claude_bible_rag_v5.py` | Agentic 輪數硬上限。 |
-| `BIBLE_SYSTEM_PROMPT`、`STYLE_INSTRUCTIONS` | `claude_bible_rag_v5.py` | 最主要的機率性調整桿。 |
-| `FHL_READ_URL`、`LINK_VERSION` | `claude_bible_rag_v5.py` | 傳統版連結目標（會存進回答）。 |
+| `MAX_TOOL_ROUNDS` | `claude_bible_rag_v6.py` | Agentic 輪數硬上限。 |
+| `BIBLE_SYSTEM_PROMPT`、`STYLE_INSTRUCTIONS` | `claude_bible_rag_v6.py` | 最主要的機率性調整桿。 |
+| `FHL_READ_URL`、`LINK_VERSION` | `claude_bible_rag_v6.py` | 傳統版連結目標（會存進回答）。 |
 | `DEFAULT_VERSE_LINK_MODE`、`VUI_BIBLE_BASE` | `web/src/lib/verseLinks.ts` | 新版連結 endpoint＋預設模式（僅渲染時）。 |
 | Cookie 名稱／效期 | `server/sessions.py` | 會話身分。 |
 
@@ -358,7 +359,7 @@ lucide-react 圖示。建置為靜態檔（`npm run build` = `tsc -b && vite bui
 |---|---|
 | 只動 `web/src` | build＋smoke e2e＋瀏覽器硬重整檢查 |
 | `server/*` | compileall＋smoke e2e＋**重啟服務**＋chat e2e |
-| `claude_bible_rag_v5.py` 的 prompt/工具/docstring | 以上全部**加上**抽樣回答比較（機率性變更 — 用 3–5 個代表性問題前後對比工具鏈與回答品質；參考當初 Sonnet 5 切換的 A/B 做法） |
+| `claude_bible_rag_v6.py` 的 prompt/工具/docstring | 以上全部**加上**抽樣回答比較（機率性變更 — 用 3–5 個代表性問題前後對比工具鏈與回答品質；參考當初 Sonnet 5 切換的 A/B 做法） |
 | `zh_hant.py` 字元表 | `.venv/bin/python scripts/test_zh_hant.py`（會拿 `logs/chat.db` 全部訊息做回歸） |
 | 換模型（`FHL_V4_MODEL_ID`） | 同 prompt 變更＋更新定價常數 |
 | 定價常數 | smoke e2e＋一次 chat e2e，然後核對 用量統計 數字 |

@@ -24,8 +24,9 @@
 | 路徑 | 角色 |
 |---|---|
 | `server/` | FastAPI 後端（新 UI）。會話、聊天 SSE、用量、SQLite。 |
-| `scripts/claude_bible_rag_v6.py` | **現行** RAG 引擎（v5 + 輸出/輸入調校：step-6 relevant data、選擇性引用經文、brief 具體格式、不做工具前敘述、不重複抓取搜尋結果經文、commentary 限最相關 2-4 節、優先 query_verse_citation 取代整章拉取）。 |
-| `scripts/claude_bible_rag_v5.py` | 前一版引擎，保留為回滾備份。**不可修改。** |
+| `scripts/claude_bible_rag_v6.py` | **現行正式**引擎（輸出/輸入調校：step-6 relevant data、選擇性引用經文、brief 具體格式、不做工具前敘述、不重複抓取搜尋結果經文、commentary 限最相關 2-4 節、優先 query_verse_citation 取代整章拉取）。 |
+| `scripts/claude_bible_rag_v7.py` | **實驗性、未上線**（v6 + fhl.net `web_search`）。2026-08-20 評測顯示 web search 使當代議題的 faithfulness/coverage 下降（模型錯誤歸屬／捏造文章引文）且成本上升，故不用於正式環境，保留供未來開發。見 §RAG 引擎 與 `scripts/eval/`。 |
+| `scripts/claude_bible_rag_v5.py` | 更早版本引擎，保留為回滾備份。**不可修改。** |
 | `scripts/claude_bible_rag_v4.py` | 更早版本引擎，保留為回滾備份。**不可修改。** |
 | `scripts/claude_bible_rag_v3.py` | 更前一版 — 舊版 Gradio 應用仍在使用。**不可修改。** |
 | `scripts/claude_bible_rag.py`、`_v2.py` | 更早的引擎，保留為回滾備份。**不可修改。** |
@@ -37,7 +38,7 @@
 | `web/` | React 18 + Vite + Tailwind SPA（TypeScript）。 |
 | `e2e/` | 端對端驗證腳本（Node，無額外相依）。 |
 | `logs/` | **執行期資料，已 gitignore**：`chat.db`（SQLite）＋舊版 JSON 備份。 |
-| `.env` | **密鑰，已 gitignore**：`ANTHROPIC_API_KEY`、可選 `FHL_V4_MODEL_ID`。 |
+| `.env` | **密鑰，已 gitignore**：`ANTHROPIC_API_KEY`、可選 `FHL_V4_MODEL_ID`、可選 `FHL_V7_WEB_SEARCH`（設 `0` 停用 web search）。 |
 | `nginx-bible_bot-snippet.conf` | 交給伺服器管理員貼進 nginx 的 location 區塊。 |
 | `.github/workflows/` | `ci.yml`（建置檢查；不需 secrets）。部署一律在伺服器上執行 `./deploy.sh`。 |
 
@@ -97,7 +98,7 @@
 
 ## RAG 引擎 — `scripts/`
 
-### `claude_bible_rag_v6.py` — 現行引擎（結構同 v5，僅 prompt 調整）
+### `claude_bible_rag_v6.py` — 現行正式引擎
 
 關鍵常數（檔案開頭）：`MODEL_ID`（預設 `claude-sonnet-5`，可用環境變數
 `FHL_V4_MODEL_ID` 覆寫 — 刻意與 v3 的 `FHL_MODEL_ID` 分開）、
@@ -131,6 +132,38 @@ style, usage_out) -> str`** — agentic 迴圈：
 
 因此連結永遠不可能指到 regex＋書卷表沒組出的地方。殘餘的（機率性）風險是
 **漏連結** — 模型若寫出 regex 不認得的引用格式，該段文字就單純不加連結。
+
+### `claude_bible_rag_v7.py` — 實驗性引擎（v6 + fhl.net web search，未上線）
+
+v7 = v6 再加 Anthropic 伺服器端 `web_search`（限定 `allowed_domains=["fhl.net"]`），
+讓「信仰 vs. 當代議題」（演化論、尼安德塔人、同志議題…）能搜信望愛站文章。
+**目前不用於正式環境**，`server/chat.py` import 的是 v6；v7 保留供未來開發。
+
+**為何暫不上線（2026-08-20 評測結論，見 `scripts/eval/`）**：50 題 × 三版
+評測顯示 web search 反而**降低**當代議題品質 —
+- faithfulness 3.6（v7）vs 4.4（v6）：模型會把句子加引號並歸給某篇信望愛
+  文章，但抓取該頁面後找不到該段文字（錯誤歸屬／捏造，評測列
+  cont01/cont02/doct01）。
+- coverage 3.9（v7）vs 4.8（v6）。
+- 成本：每題約 $0.045 vs v6 約 $0.031，另加每千次搜尋 $10。
+
+升級 v7 前需先修 prompt：**只有搜尋結果中逐字出現的文章文字才可加引號引用**，
+再重跑 `scripts/eval` 確認當代類別回升。
+
+技術要點（保留供未來）：
+- `WEB_SEARCH_TOOL` 用**基本版 `web_search_20250305`、不用 `20260209`**：
+  新版 dynamic filtering 會在伺服器端 container 跑 code execution，後續
+  請求必須帶回 `container_id`，漏帶下一輪就 400（2026-08-20 09:38 production
+  事故：查詢在第 3 輪炸掉、回答遺失）。迴圈仍防禦性地把 `response.container.id`
+  帶回，以防日後換回 container 型工具。
+- 迴圈配套：`stop_reason == "pause_turn"` → 原樣附回 assistant 訊息續跑，
+  已串流文字累積在 `carried_text` 併入最終回答；
+  `usage.server_tool_use.web_search_requests` 記進 `usage_out["web_search"]`，
+  `server/chat.py` 以每次 $0.01（$10/1,000）計入成本（v6 下此值為 0，計費碼靜置）。
+- DuckDuckGo 免費方案曾被評估但實測（2026-08-20）同 IP 連續 1-2 次請求即被
+  rate-limit，多人共用不可靠，故選原生 server tool。
+- 引擎例外現在會印 traceback 到 stderr（→ `logs/uvicorn_ui.log`）——此為
+  v7 開發時加入 `server/chat.py` 的改善，v6 上線同樣受惠。
 
 ### `zh_hant.py` — 簡體字清理（v5 新增）
 
@@ -194,8 +227,8 @@ schema，所以 **docstring 的措辭就是 prompt engineering** — 它會改�
 
 ### 舊版引擎
 `claude_bible_rag_v3.py` 供仍在運行的 Gradio 應用（`app.py`、port 7860、
-經 `FHL_MODEL_ID` 使用 Opus 4.7）。v1/v2/v4 是回滾備份。新架構完全不 import
-這些檔案 — `server/chat.py` **只 import v5**。
+經 `FHL_MODEL_ID` 使用 Opus 4.7）。v1/v2/v4/v5 是回滾備份、v7 是實驗引擎。
+新架構完全不 import 這些檔案 — `server/chat.py` **只 import v6**（正式）。
 
 ---
 
@@ -234,6 +267,7 @@ lucide-react 圖示。建置為靜態檔（`npm run build` = `tsc -b && vite bui
    第 1..N 輪：
      Claude 決定：直接回答，或呼叫工具（哪些？參數？）          [機率性]
      fhl_tools.* 執行 HTTP 呼叫、回傳 JSON                      [確定性]
+     （僅 v7 實驗引擎）web_search 在 Anthropic 端執行，僅搜 fhl.net [搜尋詞：機率性]
      每次呼叫發一個 tool_log SSE 事件 → UI 🔧 記錄              [確定性]
    最後一輪串流 text_delta 事件                                 [文字內容：機率性]
 4. _postprocess_answer() 簡體→繁體、加經文＋Strong's 連結       [確定性]
@@ -257,8 +291,9 @@ lucide-react 圖示。建置為靜態檔（`npm run build` = `tsc -b && vite bui
 | 行為 | 位置 |
 |---|---|
 | 13 個工具實作（HTTP、解析、裁切） | `scripts/fhl_tools.py` |
-| 工具分派、未知工具／壞參數錯誤處理、輪數上限（10） | `claude_bible_rag_v6.py` 迴圈 |
-| 經文與 Strong's 連結組建（regex＋書卷表；LLM 從不寫 URL） | v5 的 `linkify_*` |
+| 工具分派、未知工具／壞參數錯誤處理、輪數上限（10） | `claude_bible_rag_v6.py` 迴圈（v7 另有 `pause_turn` 續跑） |
+| web_search 網域限制（`allowed_domains=["fhl.net"]`）與次數上限（3） | `WEB_SEARCH_TOOL` 定義（僅 v7 實驗引擎；Anthropic 端強制執行） |
+| 經文與 Strong's 連結組建（regex＋書卷表；LLM 從不寫 URL） | v6 的 `linkify_*` |
 | 簡體字轉繁體（字元表，非 OpenCC） | `scripts/zh_hant.py` |
 | 傳統版/新版 href 改寫＋節錨點 | `web/src/lib/verseLinks.ts` |
 | 會話身分、cookie 處理、使用者隔離 | `server/sessions.py` |
@@ -277,6 +312,7 @@ lucide-react 圖示。建置為靜態檔（`npm run build` = `tsc -b && vite bui
 | 回答文字：用詞、結構、長度、神學論述 | system prompt、`STYLE_INSTRUCTIONS`、模型選擇 |
 | 引用是否寫成可連結化格式（約翰福音 3:16）、Strong's 是否寫成標準 `SNG#####` | system prompt 的格式規則（linkifier 之後要嘛生效、要嘛靜默跳過） |
 | 搜尋 0 筆結果時的重試行為 | prompt 中「NEVER give up」段落 |
+| 是否動用 web_search（該省則省）、搜尋關鍵字、是否附文章連結 | prompt 中「Web search」段落＋Answer Style 的 Web article citations 規則 |
 | 簡潔 vs 詳盡 的遵循程度 | 風格區塊措辭 |
 | 每則回答的 token 消耗（成本） | 模型＋prompt＋問題 |
 | 每輪延遲 | 模型＋Anthropic 負載（adaptive thinking 預設啟用） |
@@ -313,7 +349,9 @@ lucide-react 圖示。建置為靜態檔（`npm run build` = `tsc -b && vite bui
   `SONNET5_INTRO_UNTIL = 2026-08-31` 之前用 `PRICE_PER_MTOK_INTRO`
   （$2/$10，cache write 2.50、cache read 0.20），之後用
   `PRICE_PER_MTOK_STANDARD`（$3/$15/3.75/0.30）。**在查詢當下計算**，
-  所以已存的列保留歷史上正確的費率。
+  所以已存的列保留歷史上正確的費率。web_search 次數
+  （`usage["web_search"]`，v7 起）另以 `WEB_SEARCH_PRICE_PER_QUERY`
+  （$10/1,000 次）計入。
 - **換模型時**（`FHL_V4_MODEL_ID`）記得更新這些常數 —
   每列的 `model` 欄位讓舊資料仍可歸因。
 - 顯示於側欄 用量統計 modal（`GET /api/usage`）：本月＋累計、
@@ -329,7 +367,10 @@ lucide-react 圖示。建置為靜態檔（`npm run build` = `tsc -b && vite bui
 | `FHL_V4_MODEL_ID` | `.env` | 新 UI 的模型（預設 `claude-sonnet-5`）。v3/Gradio 用的是另一個 `FHL_MODEL_ID`。 |
 | `FHL_MAX_CONCURRENT` | service 環境變數 | 並行查詢上限（預設 10，超過回 429）。 |
 | `PRICE_PER_MTOK_INTRO/STANDARD`、`SONNET5_INTRO_UNTIL` | `server/chat.py` | 成本估算。 |
+| `FHL_V7_WEB_SEARCH` | `.env` | 設 `0` 停用 fhl.net web search（僅對 v7 實驗引擎有效）。 |
 | `MAX_TOOL_ROUNDS` | `claude_bible_rag_v6.py` | Agentic 輪數硬上限。 |
+| `WEB_SEARCH_TOOL`（`max_uses`、`allowed_domains`） | `claude_bible_rag_v7.py`（實驗，未上線） | 每次查詢的搜尋次數上限與網域白名單。 |
+| `WEB_SEARCH_PRICE_PER_QUERY` | `server/chat.py` | web search 計費（$10/1,000 次；v6 下靜置）。 |
 | `BIBLE_SYSTEM_PROMPT`、`STYLE_INSTRUCTIONS` | `claude_bible_rag_v6.py` | 最主要的機率性調整桿。 |
 | `FHL_READ_URL`、`LINK_VERSION` | `claude_bible_rag_v6.py` | 傳統版連結目標（會存進回答）。 |
 | `DEFAULT_VERSE_LINK_MODE`、`VUI_BIBLE_BASE` | `web/src/lib/verseLinks.ts` | 新版連結 endpoint＋預設模式（僅渲染時）。 |
@@ -359,11 +400,50 @@ lucide-react 圖示。建置為靜態檔（`npm run build` = `tsc -b && vite bui
 |---|---|
 | 只動 `web/src` | build＋smoke e2e＋瀏覽器硬重整檢查 |
 | `server/*` | compileall＋smoke e2e＋**重啟服務**＋chat e2e |
-| `claude_bible_rag_v6.py` 的 prompt/工具/docstring | 以上全部**加上**抽樣回答比較（機率性變更 — 用 3–5 個代表性問題前後對比工具鏈與回答品質；參考當初 Sonnet 5 切換的 A/B 做法） |
+| `claude_bible_rag_v6.py`（或實驗 v7）的 prompt/工具/docstring | 以上全部**加上**抽樣回答比較（機率性變更 — 用 3–5 個代表性問題前後對比工具鏈與回答品質；或跑 `scripts/eval` 全套） |
 | `zh_hant.py` 字元表 | `.venv/bin/python scripts/test_zh_hant.py`（會拿 `logs/chat.db` 全部訊息做回歸） |
 | 換模型（`FHL_V4_MODEL_ID`） | 同 prompt 變更＋更新定價常數 |
 | 定價常數 | smoke e2e＋一次 chat e2e，然後核對 用量統計 數字 |
 | DB schema | 先寫好遷移路徑（新資料表自動建立；既有資料表加**欄位**需 `ALTER TABLE`）、備份 `logs/chat.db`、再跑 smoke e2e |
+
+### LLM 評估套件 — `scripts/eval/`
+
+50 題評測集，七類：exegesis 15、word_study 6、doctrine 6、figure_history 6、
+synthesis 3、contemporary 8、adversarial 6，可對 **任一版引擎（v4–v7）**
+執行並互相比較。**`questions.json` 因大多取自真實使用者提問而 gitignored**
+（見 `scripts/eval/README.md` 的隱私說明）；版控只提供 `questions.sample.json`
+（通用示例，`cp` 後自行擴充）。三支指令（皆從 repo 根目錄執行）：
+
+```bash
+.venv/bin/python scripts/eval/run_eval.py --engine v7        # 跑題（引擎費用）
+.venv/bin/python scripts/eval/judge_eval.py scripts/eval/runs/results_v7_*.json
+.venv/bin/python scripts/eval/report_eval.py scripts/eval/runs/judged_*.json
+```
+
+- `run_eval.py` — 逐題呼叫該版 `bible_query`；以包裝共用的
+  `fhl_tools.TOOL_MAP` 擷取**完整**工具回傳（faithfulness 證據）；
+  逐題記錄 token 用量與成本（`eval_pricing.py`，含 v7 web_search 計費）。
+  `--limit N`／`--ids id...` 可跑子集。
+- `judge_eval.py` — 先做**確定性檢查**（經文連結 book/chap 與連結文字比對、
+  「引文」須存在於工具證據、引用文章連結實際抓取＋摘錄），再由
+  **claude-opus-5** 評 faithfulness／relevancy／coverage（1-5）＋violations。
+  Judge 會被告知該引擎是否具備 web_search，避免懲罰 v4–v6 沒有文章引用。
+  adversarial 題的正確行為是**拒絕**（coverage 高分）。
+  **Judge 自身 refusal 處理**：當答案本身提及資安工具（如 SSH 弱密碼腳本
+  題，答案雖正確拒絕但點名 Hydra/Medusa），Opus 5 judge 的安全分類器會
+  `stop_reason="refusal"` 回空內容；此時自動改用中性化題目描述＋
+  fallback judge（`claude-opus-4-7`，不同分類器）重評。仍失敗記 -1
+  （report 的平均排除 ≤0 分，不當作 0 拖低分數）。
+- `report_eval.py` — 多份 judged 檔並排：總分、逐類分數、確定性錯誤數、
+  延遲中位數、**各引擎成本**與 judge 成本。
+- 輸出在 `scripts/eval/runs/`（gitignored）。**2026-08-20 首次全套實測**
+  （v7/v6/v4）：引擎每版 $1.5–2.3、judge 每版 $2.1–2.7（單輪、無歷史，
+  遠低於原估）。屬「發佈前手動執行」，刻意不進 CI。
+- **首輪關鍵結論**：三版整體分數相近（F/R/C 均約 4.3／4.9／4.5），但
+  **v7 的 web search 反而拉低當代議題品質** — contemporary 類 faithfulness
+  v7 3.6 vs v6 4.4、coverage v7 3.9 vs v6 4.8：judge 抓到 v7 把句子加引號
+  歸給某篇信望愛文章、但抓取頁面找不到該段（錯誤歸屬／捏造）。故正式環境
+  維持 v6，v7 留待修正 prompt（只引用搜尋結果中逐字出現的文章文字）後再評。
 
 ### CI（GitHub Actions）與部署方式
 
@@ -393,7 +473,7 @@ commit 前先跑 e2e。
 |---|---|---|
 | Service | `fhl-bible-ui.service`（systemd --user） | `fhl-bible-bot.service` |
 | Port | 7861 | 7860 |
-| 引擎／模型 | v4／Sonnet 5（`FHL_V4_MODEL_ID`） | v3／Opus 4.7（`FHL_MODEL_ID`） |
+| 引擎／模型 | v6／Sonnet 5（`FHL_V4_MODEL_ID`；v7 實驗未上線） | v3／Opus 4.7（`FHL_MODEL_ID`） |
 | 公開路徑 | `tech.fhl.net/bible_bot/` | `tech.fhl.net/bible_tool_bot/` |
 
 日常操作：

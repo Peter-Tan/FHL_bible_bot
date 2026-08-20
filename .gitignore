@@ -43,3 +43,9 @@ desktop.ini
 .idea/
 .claude/
 .git_old/
+
+# ── eval outputs (contain real API responses; regenerate with scripts/eval) ─
+scripts/eval/runs/
+# Real question set is curated from logs/ (real user questions) — keep it
+# local; only questions.sample.json is versioned. See scripts/eval/README.md.
+scripts/eval/questions.json

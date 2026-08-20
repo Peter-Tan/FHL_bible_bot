@@ -14,10 +14,14 @@ from pydantic import BaseModel
 
 from . import db
 
-# v6 = v5 (Sonnet 5 + style + 繁體 cleanup) plus output-length tuning:
-# step-6 "relevant data", selective verse quoting, concrete brief shape,
-# no interim narration. Rollback: switch this import back to
-# claude_bible_rag_v5. (v3 stays with the production Gradio app.)
+# PRODUCTION ENGINE: v6 (output-length tuning). v7 (adds fhl.net web search)
+# exists in scripts/ for future development but is NOT used in production —
+# the 2026-08-20 evaluation showed its web search lowered faithfulness and
+# coverage on contemporary questions (the model misattributed / fabricated
+# article quotes) and raised cost. See scripts/eval/ and CODEBASE.md.
+# To trial v7: switch this import to claude_bible_rag_v7 (the web_search cost
+# accounting below activates automatically via usage["web_search"]).
+# (v3 stays with the production Gradio app.)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 from claude_bible_rag_v6 import STYLE_INSTRUCTIONS, bible_query  # noqa: E402
 from fhl_tools import ALL_TOOLS  # noqa: E402
@@ -44,6 +48,9 @@ PRICE_PER_MTOK_STANDARD = {
     "cache_write": 3.75,
     "cache_read": 0.30,
 }
+# Anthropic web_search server tool: $10 per 1,000 searches (tokens billed
+# separately above). Count comes from usage["web_search"] (v7 engine).
+WEB_SEARCH_PRICE_PER_QUERY = 10.00 / 1_000
 
 
 def _estimate_cost_usd(usage: dict) -> float:
@@ -59,7 +66,7 @@ def _estimate_cost_usd(usage: dict) -> float:
         + usage.get("out", 0) * price["output"]
         + usage.get("cache_write", 0) * price["cache_write"]
         + usage.get("cache_read", 0) * price["cache_read"]
-    ) / 1_000_000
+    ) / 1_000_000 + usage.get("web_search", 0) * WEB_SEARCH_PRICE_PER_QUERY
 
 
 def _log_usage(user_id: str, conv_id: str, usage: dict) -> None:
@@ -151,6 +158,12 @@ async def chat(body: ChatRequest, request: Request):
                     "content": answer,
                 }))
             except Exception as exc:  # surface RAG errors as an SSE event
+                # Also print the full traceback to stderr → uvicorn log:
+                # the SSE error event dies with the browser tab, and without
+                # this the server keeps no trace of engine failures.
+                import traceback
+                print(f"[chat] bible_query failed (conv {conv_id}):", file=sys.stderr)
+                traceback.print_exc()
                 # Tokens consumed before the failure are still billed — log them.
                 _log_usage(user_id, conv_id, usage)
                 loop.call_soon_threadsafe(queue.put_nowait, ("__error__", str(exc)))

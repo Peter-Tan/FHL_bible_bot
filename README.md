@@ -2,6 +2,8 @@
 
 [信望愛（Faith, Hope, Love）](https://www.fhl.net/) 的 agentic 聖經研究助手。使用者以自然語言提問，Claude（Sonnet 5）自主呼叫 13 個針對 [信望愛聖經 API](https://bible.fhl.net/) 的專用工具 — 經文、希臘文/希伯來文原文分析、Strong's 字典、註釋、關鍵字搜尋 — 並整合成一篇附引用的回答；經文引用會自動連結回 bible.fhl.net（傳統版閱讀頁）或 tech.fhl.net/vui（新版界面）。
 
+> 另有一個**實驗性**引擎 `claude_bible_rag_v7.py`，為「信仰 vs. 當代議題」加入**限定 fhl.net 網域**的 web search，但**目前不用於正式環境**——2026-08-20 的評測（見 `scripts/eval/`）顯示它在當代議題上會錯誤歸屬／捏造文章引文，faithfulness 與 coverage 反而下降且成本上升。正式環境使用 v6。
+
 **AI 不會捏造資料**：每一項事實都必須來自工具回傳結果，每一個超連結都由 Python 以 regex 擷取＋書卷名對照表確定性地組出 — LLM 從不自行撰寫 URL。詳見下方 [確定性 vs 機率性](#確定性-vs-機率性deterministic-vs-probabilistic)。
 
 - 正式網址：`https://tech.fhl.net/bible_bot/`（由 nginx 代理至 `127.0.0.1:7861`）
@@ -29,7 +31,7 @@
 FastAPI（server/）── SQLite logs/chat.db（users/conversations/messages/feedback/usage_log）
    │  bible_query()
    ▼
-RAG 引擎（scripts/claude_bible_rag_v5.py）
+RAG 引擎（scripts/claude_bible_rag_v6.py，正式）
    │  Anthropic Messages API（tool_use 迴圈、prompt caching、串流）
    ▼                              ▲
 Claude Sonnet 5 ──工具呼叫──▶  fhl_tools.py（13 個工具）
@@ -37,6 +39,7 @@ Claude Sonnet 5 ──工具呼叫──▶  fhl_tools.py（13 個工具）
                                   ▼
                           bible.fhl.net/json/*.php
 ```
+（實驗引擎 v7 另在工具清單尾端加上僅限 fhl.net 的 `web_search`，未上線。）
 
 一個問題通常跑 1–4 輪工具呼叫（由模型決定、程式碼設上限），之後串流輸出最終回答。詳見 [CODEBASE.md → 請求生命週期](CODEBASE.md#請求生命週期一個問題的完整流程)。
 
@@ -90,10 +93,11 @@ cd web && npm run build                         # 前端變更後（不需重啟
 | 模型 | `.env` → `FHL_V4_MODEL_ID` | `claude-sonnet-5` |
 | 並行查詢上限 | 環境變數 `FHL_MAX_CONCURRENT` | 10 |
 | Token 定價（成本估算） | `server/chat.py` → `PRICE_PER_MTOK_*` | Sonnet 5 intro→standard 依日期切換 |
+| Web search（僅實驗引擎 v7） | `.env` → `FHL_V7_WEB_SEARCH`；`scripts/claude_bible_rag_v7.py` → `WEB_SEARCH_TOOL` | 僅 fhl.net、每次最多 3 次（$10/1,000 次）；正式 v6 不含此功能 |
 | 經文連結新版 endpoint | `web/src/lib/verseLinks.ts` → `VUI_BIBLE_BASE` | `https://tech.fhl.net/vui/#/bible/` |
 | 經文連結預設模式 | `web/src/lib/verseLinks.ts` → `DEFAULT_VERSE_LINK_MODE` | `"traditional"` |
-| 回答風格指令 | `scripts/claude_bible_rag_v5.py` → `STYLE_INSTRUCTIONS` | 簡潔 |
-| System prompt／工具規則 | `scripts/claude_bible_rag_v5.py` → `BIBLE_SYSTEM_PROMPT` | — |
+| 回答風格指令 | `scripts/claude_bible_rag_v6.py` → `STYLE_INSTRUCTIONS` | 簡潔 |
+| System prompt／工具規則 | `scripts/claude_bible_rag_v6.py` → `BIBLE_SYSTEM_PROMPT` | — |
 
 ## 確定性 vs 機率性（Deterministic vs Probabilistic）
 
@@ -124,7 +128,9 @@ cd web && npm run build                         # 前端變更後（不需重啟
 | 路徑 | 內容 |
 |---|---|
 | `server/` | FastAPI 後端：會話、聊天 SSE、SQLite 層 |
-| `scripts/claude_bible_rag_v5.py` | 現行 RAG 引擎（v1–v4 保留為回滾備份） |
+| `scripts/claude_bible_rag_v6.py` | 現行正式 RAG 引擎（v1–v5 為回滾備份） |
+| `scripts/claude_bible_rag_v7.py` | 實驗引擎（v6 + fhl.net web search）— 未上線，見 CODEBASE.md |
+| `scripts/eval/` | LLM 評估套件（50 題 × 多引擎；faithfulness／relevancy／coverage＋成本） |
 | `scripts/zh_hant.py` | 回答的簡體→繁體字元表後處理 |
 | `scripts/fhl_tools.py` | 13 個 FHL API 工具 |
 | `scripts/app.py` | 舊版 Gradio 應用（舊正式環境，跑 v3、port 7860） |

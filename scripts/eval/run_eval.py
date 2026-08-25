@@ -25,7 +25,17 @@ sys.path.insert(0, str(EVAL_DIR.parent))  # scripts/ — engines + fhl_tools
 
 from eval_pricing import engine_cost_usd  # noqa: E402
 
-ENGINES = ["v4", "v5", "v6", "v7"]
+ENGINES = ["v4", "v5", "v6", "v7", "v8"]
+
+# v8 is the local Gemma engine and breaks the claude_bible_rag_* naming,
+# so map engine id -> module name rather than string-formatting the prefix.
+ENGINE_MODULES = {
+    "v4": "claude_bible_rag_v4",
+    "v5": "claude_bible_rag_v5",
+    "v6": "claude_bible_rag_v6",
+    "v7": "claude_bible_rag_v7",
+    "v8": "gemma_bible_rag_v8",
+}
 
 
 def main() -> None:
@@ -36,10 +46,15 @@ def main() -> None:
     ap.add_argument("--out", help="output path (default: runs/results_...)")
     args = ap.parse_args()
 
-    eng = importlib.import_module(f"claude_bible_rag_{args.engine}")
+    eng = importlib.import_module(ENGINE_MODULES[args.engine])
     import fhl_tools
 
-    questions = json.loads((EVAL_DIR / "questions.json").read_text())
+    qpath = EVAL_DIR / "questions.json"
+    if not qpath.exists():
+        qpath = EVAL_DIR / "questions.sample.json"
+        print(f"[warn] questions.json not found — using {qpath.name} "
+              f"(generic samples, not the real 50-question set)")
+    questions = json.loads(qpath.read_text())
     if args.ids:
         questions = [q for q in questions if q["id"] in args.ids]
     if args.limit:

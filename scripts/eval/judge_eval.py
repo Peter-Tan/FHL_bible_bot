@@ -281,7 +281,10 @@ def main() -> None:
     client = anthropic.Anthropic()
 
     engine = data["meta"]["engine"]
-    has_web = engine >= "v7"  # web_search shipped with v7
+    # Only v7 has the fhl.net-restricted web_search tool. NOT an ordering:
+    # v8 (local Gemma) has no web tools, so `engine >= "v7"` would wrongly
+    # tell the judge to expect article citations from it.
+    has_web = engine == "v7"
     engine_note = (
         f"Engine {engine}. This engine HAS the fhl.net-restricted web_search "
         "tool — contemporary questions should cite 信望愛站 articles when found."

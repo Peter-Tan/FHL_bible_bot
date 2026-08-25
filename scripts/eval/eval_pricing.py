@@ -29,10 +29,14 @@ def _token_cost(usage: dict, price) -> float:
 
 
 def engine_cost_usd(usage: dict) -> float:
-    """Cost of one engine query from its usage dict (all engines v4-v7)."""
+    """Cost of one engine query from its usage dict (all engines v4-v8)."""
     if not usage:
         return 0.0
     model = usage.get("model", "claude-sonnet-5")
+    # v8 serves Gemma locally — free. Without this the fallback below would
+    # price it at Sonnet rates and make the report's cost column meaningless.
+    if str(model).startswith("gemma-"):
+        return 0.0
     if model == "claude-sonnet-5":
         key = ("claude-sonnet-5-intro"
                if date.today().isoformat() <= SONNET5_INTRO_UNTIL

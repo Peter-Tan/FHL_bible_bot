@@ -33,6 +33,13 @@ cp scripts/eval/questions.sample.json scripts/eval/questions.json
 
 輸出都在 `scripts/eval/runs/`（gitignored — 含真實 API 回應）。
 
+## 指標定義與結論
+
+各數字代表什麼、怎麼算、2026-08-20 四引擎實測結論，見
+**[`README_METRICS.md`](README_METRICS.md)**。
+題庫本身的設計問題與修訂建議（對抗題）見
+**[`QUESTION_DESIGN.md`](QUESTION_DESIGN.md)**。
+
 ## 各檔角色
 
 | 檔案 | 角色 |
@@ -41,6 +48,7 @@ cp scripts/eval/questions.sample.json scripts/eval/questions.json
 | `questions.sample.json` | 版控中的示例題庫（通用、非個資）。 |
 | `run_eval.py` | 對指定引擎逐題呼叫 `bible_query`；以包裝共用的 `fhl_tools.TOOL_MAP` 擷取**完整**工具回傳（faithfulness 證據）；逐題記錄 token／成本／延遲；**每題落地存檔**（長跑可抗中斷）。 |
 | `judge_eval.py` | 先做確定性檢查（經文連結 book/chap↔文字比對、「引文」須存在於工具證據、引用文章連結實際抓取＋摘錄），再由 `claude-opus-5` 評分。Judge 會被告知該引擎是否具備 web_search（不懲罰 v4–v6 沒有文章引用）。Judge 自身若因安全分類器 refuse（如答案點名資安工具），自動改用中性化題目＋`claude-opus-4-7` fallback。 |
+| `quant_eval.py` | 確定性百分比評分（免費、離線、不需 judge）：引用佐證率、引文佐證率、共識召回率等。定義見 `README_METRICS.md`。 |
 | `report_eval.py` | 多引擎並排：總分、逐類分數、確定性錯誤數、延遲中位數、**各引擎成本**與 judge 成本。 |
 | `eval_pricing.py` | 引擎與 judge 的計費（含 v7 web_search 每千次 $10）。 |
 

@@ -30,6 +30,8 @@ data/
 env_setup_txt
 https._setup.txt
 FRONTEND_MIGRATION_PLAN.md
+test.py
+lab-network-handover.md
 
 # ── e2e artifacts ────────────────────────────────────────────
 e2e/*.png
@@ -46,6 +48,8 @@ desktop.ini
 
 # ── eval outputs (contain real API responses; regenerate with scripts/eval) ─
 scripts/eval/runs/
-# Real question set is curated from logs/ (real user questions) — keep it
-# local; only questions.sample.json is versioned. See scripts/eval/README.md.
-scripts/eval/questions.json
+# questions.json is the PUBLIC bank: paraphrased from real user questions,
+# fingerprints removed, and it IS versioned. The unsanitised set curated
+# straight from logs/ lives in questions.private.json and must NEVER be
+# committed. See scripts/eval/README.md.
+scripts/eval/questions.private.json

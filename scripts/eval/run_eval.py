@@ -124,7 +124,9 @@ def main() -> None:
         results.append({
             "id": q["id"],
             "category": q["category"],
+            "subtype": q.get("subtype"),
             "question": q["question"],
+            "expected_behavior": q.get("expected_behavior"),
             "expected": q["expected"],
             "answer": answer,
             "error": error,

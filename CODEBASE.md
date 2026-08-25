@@ -38,12 +38,18 @@
 | `web/` | React 18 + Vite + Tailwind SPA（TypeScript）。 |
 | `e2e/` | 端對端驗證腳本（Node，無額外相依）。 |
 | `logs/` | **執行期資料，已 gitignore**：`chat.db`（SQLite）＋舊版 JSON 備份。 |
-| `.env` | **密鑰，已 gitignore**：`ANTHROPIC_API_KEY`、可選 `FHL_V4_MODEL_ID`、可選 `FHL_V7_WEB_SEARCH`（設 `0` 停用 web search）。 |
+| `.env` | **密鑰與部署設定，已 gitignore**：`ANTHROPIC_API_KEY`、可選 `FHL_ENGINE`（`v6`／`v7`／`v8`，未設＝`v6` 正式）、可選 `FHL_V4_MODEL_ID`、可選 `FHL_V7_WEB_SEARCH`（設 `0` 停用 web search）、v8 專用 `FHL_V8_BASE_URL`／`FHL_V8_MODEL_ID`。 |
 | `nginx-bible_bot-snippet.conf` | 交給伺服器管理員貼進 nginx 的 location 區塊。 |
 | `.github/workflows/` | `ci.yml`（建置檢查；不需 secrets）。部署一律在伺服器上執行 `./deploy.sh`。 |
 
-引擎版本管理慣例：**永不修改舊版** — 複製為 `_vN+1.py`、改複本、再切換
-`server/chat.py` 的 import。回滾＝把 import 換回去。
+引擎版本管理慣例：**永不修改舊版** — 複製為 `_vN+1.py`、改複本、再登錄到
+`server/chat.py` 的 `ENGINE_MODULES`。
+
+**跑哪一版引擎是設定、不是程式碼**：由 `.env` 的 `FHL_ENGINE` 決定（未設＝`v6`
+正式），且**只 import 被選中的那一個模組**。因此 v8（需要本機 vLLM）留在
+`scripts/` 對雲端機器完全無害 —— 雲端不設 `FHL_ENGINE` 就是 v6，本機 GPU 機
+設 `FHL_ENGINE=v8`，兩台跟同一個 `main`。切換／回滾都只是改 `.env`＋重啟。
+值若拼錯或無法辨識會退回 `v6`，不會讓服務起不來。
 
 ---
 
@@ -227,8 +233,9 @@ schema，所以 **docstring 的措辭就是 prompt engineering** — 它會改�
 
 ### 舊版引擎
 `claude_bible_rag_v3.py` 供仍在運行的 Gradio 應用（`app.py`、port 7860、
-經 `FHL_MODEL_ID` 使用 Opus 4.7）。v1/v2/v4/v5 是回滾備份、v7 是實驗引擎。
-新架構完全不 import 這些檔案 — `server/chat.py` **只 import v6**（正式）。
+經 `FHL_MODEL_ID` 使用 Opus 4.7）。v1/v2/v4/v5 是回滾備份、v7 是實驗引擎、
+v8 是本機 Gemma 評估引擎。`server/chat.py` 在啟動時**只 import `FHL_ENGINE`
+指定的那一個**（未設＝v6 正式），其餘檔案完全不會被載入。
 
 ---
 

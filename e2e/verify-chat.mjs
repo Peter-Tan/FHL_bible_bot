@@ -82,7 +82,14 @@ const usageAfter = await (await call("/usage")).json();
 const dQueries = usageAfter.user.month.queries - usageBefore.user.month.queries;
 const dCost = usageAfter.user.month.cost_usd - usageBefore.user.month.cost_usd;
 check("usage_log gained one query", dQueries === 1, `Δqueries=${dQueries}`);
-check("cost recorded > 0", dCost > 0, `Δcost=$${dCost.toFixed(6)}`);
+// A locally served engine (v8 / Gemma via vLLM) costs nothing, so the row is
+// correctly written with cost 0. Run with FHL_LOCAL_ENGINE=1 to relax this to
+// >= 0; the strict check stays the default for the paid Claude engines.
+if (process.env.FHL_LOCAL_ENGINE === "1") {
+  check("cost recorded >= 0 (local engine)", dCost >= 0, `Δcost=$${dCost.toFixed(6)}`);
+} else {
+  check("cost recorded > 0", dCost > 0, `Δcost=$${dCost.toFixed(6)}`);
+}
 check("output tokens recorded > 0", usageAfter.user.month.output_tokens > usageBefore.user.month.output_tokens);
 
 // cleanup

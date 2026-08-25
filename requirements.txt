@@ -6,3 +6,4 @@ fastapi>=0.128.0
 uvicorn>=0.39.0
 requests>=2.32.0
 python-dotenv>=1.2.0
+openai>=1.40.0  # v8 engine: local vLLM OpenAI-compatible endpoint

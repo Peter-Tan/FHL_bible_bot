@@ -35,4 +35,11 @@ Subject line 中文為主; the body explains what changed and why.
 
 Never modify `scripts/claude_bible_rag.py` / `_v2` / `_v3` — they are rollback
 backups (v3 still powers the legacy Gradio app). To change engine behavior,
-copy v4 to v5, edit the copy, switch the import in `server/chat.py`.
+copy the current engine to `_vN+1`, edit the copy, then register it in
+`ENGINE_MODULES` in `server/chat.py`.
+
+**Which engine runs is config, not code**: `FHL_ENGINE` in `.env` selects it
+(unset → `v6`, production). Only the selected module is imported, so an engine
+needing infrastructure the box lacks (v8 needs a local vLLM server) is inert
+where it is not selected. Never hardcode the import — the cloud deployment and
+the local-GPU box both track `main`, and differ only by that one `.env` line.

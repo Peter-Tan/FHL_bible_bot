@@ -3,10 +3,13 @@ from __future__ import annotations
 """POST /api/chat — runs bible_query() in a worker thread, streams SSE."""
 
 import asyncio
+import importlib
 import json
 import os
 import sys
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -14,16 +17,47 @@ from pydantic import BaseModel
 
 from . import db
 
-# PRODUCTION ENGINE: v6 (output-length tuning). v7 (adds fhl.net web search)
-# exists in scripts/ for future development but is NOT used in production —
-# the 2026-08-20 evaluation showed its web search lowered faithfulness and
-# coverage on contemporary questions (the model misattributed / fabricated
-# article quotes) and raised cost. See scripts/eval/ and CODEBASE.md.
-# To trial v7: switch this import to claude_bible_rag_v7 (the web_search cost
-# accounting below activates automatically via usage["web_search"]).
-# (v3 stays with the production Gradio app.)
+# ENGINE SELECTION — `FHL_ENGINE` in .env; unset means v6 (production).
+#   v6  PRODUCTION: Claude Sonnet 5 via the Anthropic API (cloud deployment).
+#   v7  Experimental: v6 + fhl.net web_search, NOT used in production — the
+#       2026-08-20 evaluation showed its web search lowered faithfulness and
+#       coverage on contemporary questions (the model misattributed /
+#       fabricated article quotes) and raised cost. See scripts/eval/ and
+#       CODEBASE.md. The web_search cost accounting below activates
+#       automatically via usage["web_search"].
+#   v8  Evaluation: Gemma 4 26B-A4B served locally by vLLM — no API cost, much
+#       lower latency, but REQUIRES a vLLM server at FHL_V8_BASE_URL. See
+#       GEMMA_VLLM_MIGRATION.md.
+# Only the SELECTED module is imported, so a deployment without vLLM (or
+# without the `openai` package) is unaffected by v8 merely existing in
+# scripts/. Switching engines is a .env edit + restart, and rollback is the
+# same edit in reverse — no code change, so both deployments track main.
+# An unset or unrecognized value falls back to v6: a typo must never be able
+# to take production down. (v3 stays with the production Gradio app.)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-from claude_bible_rag_v6 import STYLE_INSTRUCTIONS, bible_query  # noqa: E402
+
+ENGINE_MODULES = {
+    "v6": "claude_bible_rag_v6",
+    "v7": "claude_bible_rag_v7",
+    "v8": "gemma_bible_rag_v8",
+}
+DEFAULT_ENGINE = "v6"
+
+# The engine modules each call load_dotenv() themselves, but that is too late
+# for a decision made *before* the import — so load .env here first.
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+ENGINE = (os.environ.get("FHL_ENGINE") or DEFAULT_ENGINE).strip().lower()
+if not ENGINE:  # set-but-empty (common in deploy scripts) == unset
+    ENGINE = DEFAULT_ENGINE
+if ENGINE not in ENGINE_MODULES:
+    print(f"WARNING: unknown FHL_ENGINE={ENGINE!r}; using {DEFAULT_ENGINE}",
+          file=sys.stderr)
+    ENGINE = DEFAULT_ENGINE
+
+_engine_module = importlib.import_module(ENGINE_MODULES[ENGINE])
+STYLE_INSTRUCTIONS = _engine_module.STYLE_INSTRUCTIONS
+bible_query = _engine_module.bible_query
+
 from fhl_tools import ALL_TOOLS  # noqa: E402
 
 router = APIRouter(prefix="/api")
@@ -55,6 +89,13 @@ WEB_SEARCH_PRICE_PER_QUERY = 10.00 / 1_000
 
 def _estimate_cost_usd(usage: dict) -> float:
     from datetime import date
+
+    # Locally served models are free. Without this guard a v8 row would be
+    # priced at Sonnet rates and silently inflate the 用量統計 totals.
+    # usage_log.model still records the real model id, so per-model
+    # attribution survives and Claude rows keep their historical rates.
+    if str(usage.get("model", "")).startswith("gemma-"):
+        return 0.0
 
     price = (
         PRICE_PER_MTOK_INTRO

@@ -476,6 +476,14 @@ code assistant is a reputational and abuse problem for 信望愛.
 
 ### 9.7 Not yet done
 
+> **CORRECTION (added 2026-08-31).** The judge WAS run later the same day, on a
+> host that had the key: `runs/judged_v8_20260820_164559.json` (50 questions,
+> judge `claude-opus-5`, $1.52) and `runs/report_20260820_v8.md`. The ship gate
+> was therefore measured — and **v8 failed it**: faithfulness 4.00 vs v6 4.32
+> (gap 0.32) and coverage 3.50 vs 4.58 (gap 1.08), against a ≤0.3 threshold.
+> The bullets below describe the state at the time of writing only; see
+> `V8_DGX_SPARK.md` §2 B2 for the current position.
+
 - **Judge scoring** (`judge_eval.py`) — needs `ANTHROPIC_API_KEY`; this clone has
   no `.env` (correctly gitignored), so no F/R/C numbers and **no head-to-head v6
   comparison was possible on this host**. Run on the FHL workstation, against the

@@ -26,9 +26,9 @@
 | `server/` | FastAPI 後端（新 UI）。會話、聊天 SSE、用量、SQLite。 |
 | `scripts/claude_bible_rag_v6.py` | **現行正式**引擎（輸出/輸入調校：step-6 relevant data、選擇性引用經文、brief 具體格式、不做工具前敘述、不重複抓取搜尋結果經文、commentary 限最相關 2-4 節、優先 query_verse_citation 取代整章拉取）。 |
 | `scripts/claude_bible_rag_v7.py` | **實驗性、未上線**（v6 + fhl.net `web_search`）。2026-08-20 評測顯示 web search 使當代議題的 faithfulness/coverage 下降（模型錯誤歸屬／捏造文章引文）且成本上升，故不用於正式環境，保留供未來開發。見 §RAG 引擎 與 `scripts/eval/`。 |
-| `scripts/claude_bible_rag_v5.py` | 更早版本引擎，保留為回滾備份。**不可修改。** |
-| `scripts/claude_bible_rag_v4.py` | 更早版本引擎，保留為回滾備份。**不可修改。** |
-| `scripts/claude_bible_rag_v3.py` | 更前一版 — 舊版 Gradio 應用仍在使用。**不可修改。** |
+| `scripts/claude_bible_rag_v5.py` | 修改簡體字bug的版本引擎，保留為回滾備份。**不可修改。** |
+| `scripts/claude_bible_rag_v4.py` | 修改成react/sonnet5版本的引擎，保留為回滾備份。**不可修改。** |
+| `scripts/claude_bible_rag_v3.py` | Opus版本 — 舊版 Gradio 應用仍在使用。**不可修改。** |
 | `scripts/claude_bible_rag.py`、`_v2.py` | 更早的引擎，保留為回滾備份。**不可修改。** |
 | `scripts/fhl_tools.py` | 13 個 FHL API 工具（各版引擎共用）。 |
 | `scripts/zh_hant.py` | 簡體→繁體字元表（2,475 筆）＋ `to_traditional()`。 |

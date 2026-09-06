@@ -24,8 +24,11 @@
 | 路徑 | 角色 |
 |---|---|
 | `server/` | FastAPI 後端（新 UI）。會話、聊天 SSE、用量、SQLite。 |
-| `scripts/claude_bible_rag_v6.py` | **現行正式**引擎（輸出/輸入調校：step-6 relevant data、選擇性引用經文、brief 具體格式、不做工具前敘述、不重複抓取搜尋結果經文、commentary 限最相關 2-4 節、優先 query_verse_citation 取代整章拉取）。 |
-| `scripts/claude_bible_rag_v7.py` | **實驗性、未上線**（v6 + fhl.net `web_search`）。2026-08-20 評測顯示 web search 使當代議題的 faithfulness/coverage 下降（模型錯誤歸屬／捏造文章引文）且成本上升，故不用於正式環境，保留供未來開發。見 §RAG 引擎 與 `scripts/eval/`。 |
+| `scripts/claude_bible_rag_v6_1.py` | **現行正式**引擎（v6.1 ＝ v6 ＋ 冪等、可自我修復的連結後處理）。見 §超連結後處理。 |
+| `scripts/claude_bible_rag_v6.py` | v6 功能主線（輸出/輸入調校：step-6 relevant data、選擇性引用經文、brief 具體格式、不做工具前敘述、不重複抓取搜尋結果經文、commentary 限最相關 2-4 節、優先 query_verse_citation 取代整章拉取）。**未來功能開發繼續走這條線**；帶著已修 bug 的版本是 v6.1。 |
+| `scripts/claude_bible_rag_v7_1.py` | v7.1 ＝ v7 ＋ 同一項連結修正。**實驗性、未上線。** |
+| `scripts/claude_bible_rag_v7.py` | v7 功能主線（v6 + fhl.net `web_search`）。2026-08-20 評測顯示 web search 使當代議題的 faithfulness/coverage 下降（模型錯誤歸屬／捏造文章引文）且成本上升，故不用於正式環境，保留供未來開發。見 §RAG 引擎 與 `scripts/eval/`。 |
+| `scripts/gemma_bible_rag_v8_1.py` | v8.1 ＝ v8 ＋ 同一項連結修正。需本機 vLLM。 |
 | `scripts/claude_bible_rag_v5.py` | 修改簡體字bug的版本引擎，保留為回滾備份。**不可修改。** |
 | `scripts/claude_bible_rag_v4.py` | 修改成react/sonnet5版本的引擎，保留為回滾備份。**不可修改。** |
 | `scripts/claude_bible_rag_v3.py` | Opus版本 — 舊版 Gradio 應用仍在使用。**不可修改。** |
@@ -34,22 +37,30 @@
 | `scripts/zh_hant.py` | 簡體→繁體字元表（2,475 筆）＋ `to_traditional()`。 |
 | `scripts/gen_zh_hant_table.py` | 重建上述字元表（手動執行，需 OpenCC）。 |
 | `scripts/test_zh_hant.py` | 字元表的回歸測試（`.venv/bin/python scripts/test_zh_hant.py`）。 |
+| `scripts/test_linkify.py` | 連結後處理的回歸測試（`.venv/bin/python scripts/test_linkify.py`）：冪等性、巢狀連結拆解、無法重建的連結必須保留，並拿整個 `chat.db` 做語料回歸。 |
+| `scripts/repair_verse_links.py` | 一次性修復 `chat.db` 內既有的壞連結（預設 dry run，`--apply` 才寫入，寫入前自動備份）。2026-09-06 已對正式資料庫執行過一次。 |
 | `scripts/app.py` | 舊版 Gradio 應用（舊正式環境、port 7860、import v3）。 |
 | `web/` | React 18 + Vite + Tailwind SPA（TypeScript）。 |
 | `e2e/` | 端對端驗證腳本（Node，無額外相依）。 |
 | `logs/` | **執行期資料，已 gitignore**：`chat.db`（SQLite）＋舊版 JSON 備份。 |
-| `.env` | **密鑰與部署設定，已 gitignore**：`ANTHROPIC_API_KEY`、可選 `FHL_ENGINE`（`v6`／`v7`／`v8`，未設＝`v6` 正式）、可選 `FHL_V4_MODEL_ID`、可選 `FHL_V7_WEB_SEARCH`（設 `0` 停用 web search）、v8 專用 `FHL_V8_BASE_URL`／`FHL_V8_MODEL_ID`。 |
+| `.env` | **密鑰與部署設定，已 gitignore**：`ANTHROPIC_API_KEY`、可選 `FHL_ENGINE`（`v6`／`v6.1`／`v7`／`v7.1`／`v8`／`v8.1`，未設＝`v6.1` 正式）、可選 `FHL_V4_MODEL_ID`、可選 `FHL_V7_WEB_SEARCH`（設 `0` 停用 web search）、v8 專用 `FHL_V8_BASE_URL`／`FHL_V8_MODEL_ID`。 |
 | `nginx-bible_bot-snippet.conf` | 交給伺服器管理員貼進 nginx 的 location 區塊。 |
 | `.github/workflows/` | `ci.yml`（建置檢查；不需 secrets）。部署一律在伺服器上執行 `./deploy.sh`。 |
 
 引擎版本管理慣例：**永不修改舊版** — 複製為 `_vN+1.py`、改複本、再登錄到
 `server/chat.py` 的 `ENGINE_MODULES`。
 
+**`.1` 是 bug-fix 分支，不是新功能**：`vN` 保留給功能開發繼續往前走，
+`vN.1` 就是 `vN` 加上已經修好的 bug（檔名用底線，`claude_bible_rag_v6_1.py`
+＝ 設定值 `v6.1`）。目前三個 `.1` 都只差一件事 —— 冪等的連結後處理。
+功能改動請從 `vN` 複製成 `vN+1`；bug 修正則從 `vN` 複製成 `vN.1`，
+並把同一個修正補到其他還在用的版本線上。
+
 **跑哪一版引擎是設定、不是程式碼**：由 `.env` 的 `FHL_ENGINE` 決定（未設＝`v6`
-正式），且**只 import 被選中的那一個模組**。因此 v8（需要本機 vLLM）留在
-`scripts/` 對雲端機器完全無害 —— 雲端不設 `FHL_ENGINE` 就是 v6，本機 GPU 機
-設 `FHL_ENGINE=v8`，兩台跟同一個 `main`。切換／回滾都只是改 `.env`＋重啟。
-值若拼錯或無法辨識會退回 `v6`，不會讓服務起不來。
+正式），且**只 import 被選中的那一個模組**。因此 v8／v8.1（需要本機 vLLM）
+留在 `scripts/` 對雲端機器完全無害 —— 雲端不設 `FHL_ENGINE` 就是 v6.1，
+本機 GPU 機設 `FHL_ENGINE=v8.1`，兩台跟同一個 `main`。切換／回滾都只是改
+`.env`＋重啟。值若拼錯或無法辨識會退回 `v6.1`，不會讓服務起不來。
 
 ---
 
@@ -104,7 +115,7 @@
 
 ## RAG 引擎 — `scripts/`
 
-### `claude_bible_rag_v6.py` — 現行正式引擎
+### `claude_bible_rag_v6_1.py` — 現行正式引擎（v6.1）
 
 關鍵常數（檔案開頭）：`MODEL_ID`（預設 `claude-sonnet-5`，可用環境變數
 `FHL_V4_MODEL_ID` 覆寫 — 刻意與 v3 的 `FHL_MODEL_ID` 分開）、
@@ -134,10 +145,42 @@ style, usage_out) -> str`** — agentic 迴圈：
   （`fhl_tools`）解析；URL 由 `_build_read_url()` 組出（章層級、不帶 `sec`
   參數 — 刻意開整章）。
 - `linkify_strongs_numbers()` — 比對 `SN[GH]\d{1,5}`、補零正規化、連到
-  `bible.fhl.net/new/s.php?N={0|1}&k={num}`；已在 markdown 連結內的編號會跳過。
+  `bible.fhl.net/new/s.php?N={0|1}&k={num}`。
 
 因此連結永遠不可能指到 regex＋書卷表沒組出的地方。殘餘的（機率性）風險是
 **漏連結** — 模型若寫出 regex 不認得的引用格式，該段文字就單純不加連結。
+
+**冪等性（idempotence）— v6.1／v7.1／v8.1 修掉的正式環境 bug。** v6 以前用
+`(?<!\[)` 這個 look-behind 想「跳過已經在 markdown 連結內的文字」，但它只擋住
+緊接在 `[` 之後的那一個位置；而中文書卷全名的**尾字本身就是另一卷書的簡稱**
+（以賽亞書 → 書＝約書亞記、以西結 → 結＝以西結書），所以第二次掃描會從中間
+重新比對成功，產生 markdown 無法算繪的巢狀連結：
+
+    [以賽亞書11:1](…賽…)  →  [以賽亞[書11:1](…書…)](…賽…)
+
+而第二次掃描是常態發生的：已加連結的回答會被當成 history 回放給模型
+（`server/db.py`），模型於是模仿著自己寫經文超連結、手抄長 URL 並把
+`chineses=` 打成 `chieneses=`（read.php 會忽略未知參數 → 死連結，
+`web/src/lib/verseLinks.ts` 的 vui 改寫也因為讀不到 `chineses` 而失效）。
+正式環境有一段對話在 11 個回合內，程式產生的連結佔比從 100% 掉到 0%；
+`chat.db` 338 篇回答中有 43 篇受影響。`.1` 版的作法：
+
+- 拿掉 look-behind，改成**依區段保護**（`_sub_outside_protected`）：既有的
+  markdown 連結、行內程式碼、裸 URL 一律不進去加連結。
+- `_unnest_links()` 先把巢狀連結攤平回純文字再重建 —— 即使內層標籤單獨看
+  （`福音10:12-13`）已經不是 regex 認得的引用。
+- `_collapse_links()` 把既有的 FHL 連結拆回純文字、再用書卷表重建，因此模型
+  手寫的錯參數連結會被**正規化**；但若標籤無法重建（舊格式
+  `[H5315](…s.php…)`、無書卷名的 `[34:9-10]` 續引）則**不拆**，以免連結被刪掉。
+- `_BAD_BOOK_PARAM_RE` 針對上述不拆的連結，就地修好被打錯的書卷參數。
+- `_unbracket()` 拿掉模型自行加在引用外面的裸中括號，避免變成
+  `[[出19:16-20](url)]`。
+- prompt 另加一條規則：不要自己寫經文／Strong's 超連結，也不要照抄前面回合
+  看到的連結 markdown。這只是保險，保證仍在上面的程式碼裡。
+
+`server/db.py` 的 `get_api_history()` 會在回放前把 FHL 連結剝成純文字，從源頭
+移除模型模仿的對象（順帶少送約 32% 的 history 字元 —— 那是 URL 佔的比例）。
+回歸測試見 `scripts/test_linkify.py`。
 
 ### `claude_bible_rag_v7.py` — 實驗性引擎（v6 + fhl.net web search，未上線）
 
@@ -298,9 +341,9 @@ lucide-react 圖示。建置為靜態檔（`npm run build` = `tsc -b && vite bui
 | 行為 | 位置 |
 |---|---|
 | 13 個工具實作（HTTP、解析、裁切） | `scripts/fhl_tools.py` |
-| 工具分派、未知工具／壞參數錯誤處理、輪數上限（10） | `claude_bible_rag_v6.py` 迴圈（v7 另有 `pause_turn` 續跑） |
+| 工具分派、未知工具／壞參數錯誤處理、輪數上限（10） | `claude_bible_rag_v6_1.py` 迴圈（v7／v7.1 另有 `pause_turn` 續跑） |
 | web_search 網域限制（`allowed_domains=["fhl.net"]`）與次數上限（3） | `WEB_SEARCH_TOOL` 定義（僅 v7 實驗引擎；Anthropic 端強制執行） |
-| 經文與 Strong's 連結組建（regex＋書卷表；LLM 從不寫 URL） | v6 的 `linkify_*` |
+| 經文與 Strong's 連結組建（regex＋書卷表；LLM 從不寫 URL；冪等、可自我修復） | v6.1 的 `linkify_*` |
 | 簡體字轉繁體（字元表，非 OpenCC） | `scripts/zh_hant.py` |
 | 傳統版/新版 href 改寫＋節錨點 | `web/src/lib/verseLinks.ts` |
 | 會話身分、cookie 處理、使用者隔離 | `server/sessions.py` |
@@ -375,11 +418,11 @@ lucide-react 圖示。建置為靜態檔（`npm run build` = `tsc -b && vite bui
 | `FHL_MAX_CONCURRENT` | service 環境變數 | 並行查詢上限（預設 10，超過回 429）。 |
 | `PRICE_PER_MTOK_INTRO/STANDARD`、`SONNET5_INTRO_UNTIL` | `server/chat.py` | 成本估算。 |
 | `FHL_V7_WEB_SEARCH` | `.env` | 設 `0` 停用 fhl.net web search（僅對 v7 實驗引擎有效）。 |
-| `MAX_TOOL_ROUNDS` | `claude_bible_rag_v6.py` | Agentic 輪數硬上限。 |
+| `MAX_TOOL_ROUNDS` | `claude_bible_rag_v6_1.py` | Agentic 輪數硬上限。 |
 | `WEB_SEARCH_TOOL`（`max_uses`、`allowed_domains`） | `claude_bible_rag_v7.py`（實驗，未上線） | 每次查詢的搜尋次數上限與網域白名單。 |
 | `WEB_SEARCH_PRICE_PER_QUERY` | `server/chat.py` | web search 計費（$10/1,000 次；v6 下靜置）。 |
-| `BIBLE_SYSTEM_PROMPT`、`STYLE_INSTRUCTIONS` | `claude_bible_rag_v6.py` | 最主要的機率性調整桿。 |
-| `FHL_READ_URL`、`LINK_VERSION` | `claude_bible_rag_v6.py` | 傳統版連結目標（會存進回答）。 |
+| `BIBLE_SYSTEM_PROMPT`、`STYLE_INSTRUCTIONS` | `claude_bible_rag_v6_1.py` | 最主要的機率性調整桿。 |
+| `FHL_READ_URL`、`LINK_VERSION` | `claude_bible_rag_v6_1.py` | 傳統版連結目標（會存進回答）。 |
 | `DEFAULT_VERSE_LINK_MODE`、`VUI_BIBLE_BASE` | `web/src/lib/verseLinks.ts` | 新版連結 endpoint＋預設模式（僅渲染時）。 |
 | Cookie 名稱／效期 | `server/sessions.py` | 會話身分。 |
 
@@ -407,8 +450,9 @@ lucide-react 圖示。建置為靜態檔（`npm run build` = `tsc -b && vite bui
 |---|---|
 | 只動 `web/src` | build＋smoke e2e＋瀏覽器硬重整檢查 |
 | `server/*` | compileall＋smoke e2e＋**重啟服務**＋chat e2e |
-| `claude_bible_rag_v6.py`（或實驗 v7）的 prompt/工具/docstring | 以上全部**加上**抽樣回答比較（機率性變更 — 用 3–5 個代表性問題前後對比工具鏈與回答品質；或跑 `scripts/eval` 全套） |
+| `claude_bible_rag_v6_1.py`（或實驗 v7.1）的 prompt/工具/docstring | 以上全部**加上**抽樣回答比較（機率性變更 — 用 3–5 個代表性問題前後對比工具鏈與回答品質；或跑 `scripts/eval` 全套） |
 | `zh_hant.py` 字元表 | `.venv/bin/python scripts/test_zh_hant.py`（會拿 `logs/chat.db` 全部訊息做回歸） |
+| `linkify_*` / `server/db.py` 的連結處理 | `.venv/bin/python scripts/test_linkify.py`（同樣會拿 `logs/chat.db` 做語料回歸） |
 | 換模型（`FHL_V4_MODEL_ID`） | 同 prompt 變更＋更新定價常數 |
 | 定價常數 | smoke e2e＋一次 chat e2e，然後核對 用量統計 數字 |
 | DB schema | 先寫好遷移路徑（新資料表自動建立；既有資料表加**欄位**需 `ALTER TABLE`）、備份 `logs/chat.db`、再跑 smoke e2e |

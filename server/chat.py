@@ -17,17 +17,26 @@ from pydantic import BaseModel
 
 from . import db
 
-# ENGINE SELECTION — `FHL_ENGINE` in .env; unset means v6 (production).
-#   v6  PRODUCTION: Claude Sonnet 5 via the Anthropic API (cloud deployment).
-#   v7  Experimental: v6 + fhl.net web_search, NOT used in production — the
+# ENGINE SELECTION — `FHL_ENGINE` in .env; unset means v6.1 (production).
+#
+# A trailing `.1` is a BUG-FIX branch of the version before it, nothing else:
+# vN keeps its feature line open for future development, vN.1 is vN plus
+# already-shipped fixes. Currently every `.1` carries exactly one change — the
+# idempotent, self-healing verse/Strong's linkifier (see any vN_1 docstring for
+# the bug, and scripts/test_linkify.py for the guard rails).
+#   v6    Claude Sonnet 5 via the Anthropic API — previous production.
+#   v6.1  PRODUCTION: v6 + the linkifier fix.
+#   v7    Experimental: v6 + fhl.net web_search, NOT used in production — the
 #       2026-08-20 evaluation showed its web search lowered faithfulness and
 #       coverage on contemporary questions (the model misattributed /
 #       fabricated article quotes) and raised cost. See scripts/eval/ and
 #       CODEBASE.md. The web_search cost accounting below activates
 #       automatically via usage["web_search"].
-#   v8  Evaluation: Gemma 4 26B-A4B served locally by vLLM — no API cost, much
-#       lower latency, but REQUIRES a vLLM server at FHL_V8_BASE_URL. See
-#       GEMMA_VLLM_MIGRATION.md.
+#   v7.1  v7 + the linkifier fix.
+#   v8    Evaluation: Gemma 4 26B-A4B served locally by vLLM — no API cost,
+#         much lower latency, but REQUIRES a vLLM server at FHL_V8_BASE_URL.
+#         See GEMMA_VLLM_MIGRATION.md.
+#   v8.1  v8 + the linkifier fix.
 # Only the SELECTED module is imported, so a deployment without vLLM (or
 # without the `openai` package) is unaffected by v8 merely existing in
 # scripts/. Switching engines is a .env edit + restart, and rollback is the
@@ -37,11 +46,14 @@ from . import db
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
 ENGINE_MODULES = {
-    "v6": "claude_bible_rag_v6",
-    "v7": "claude_bible_rag_v7",
-    "v8": "gemma_bible_rag_v8",
+    "v6":   "claude_bible_rag_v6",
+    "v6.1": "claude_bible_rag_v6_1",
+    "v7":   "claude_bible_rag_v7",
+    "v7.1": "claude_bible_rag_v7_1",
+    "v8":   "gemma_bible_rag_v8",
+    "v8.1": "gemma_bible_rag_v8_1",
 }
-DEFAULT_ENGINE = "v6"
+DEFAULT_ENGINE = "v6.1"
 
 # The engine modules each call load_dotenv() themselves, but that is too late
 # for a decision made *before* the import — so load .env here first.

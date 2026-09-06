@@ -2,6 +2,7 @@ from __future__ import annotations
 
 """SQLite access layer for the chat backend (logs/chat.db, WAL mode)."""
 
+import re
 import sqlite3
 import uuid
 from contextlib import contextmanager
@@ -185,6 +186,32 @@ def delete_conversation(user_id: str, conv_id: str) -> bool:
 
 # ── messages ──────────────────────────────────────────────────────────────────
 
+# Stored answers are the post-processed ones: verse and Strong's citations are
+# already wrapped in bible.fhl.net Markdown links. Replaying those verbatim as
+# history taught the model to write its own verse hyperlinks — it copied the
+# long URLs by hand, mistyped them ('chieneses=' for 'chineses='), and the
+# deterministic linkifier then had nothing left to do. Strip the links on the
+# way back into the prompt: the model sees the plain citations it is asked to
+# produce, and the ~30% of stored answer text that is URL characters stops
+# being re-sent every turn.
+_FHL_LINK_RE = re.compile(
+    r"\[([^\[\]]*)\]\(\s*https?://bible\.fhl\.net/new/(?:read|s)\.php[^)\s]*\)"
+)
+
+
+def _strip_fhl_links(text: str) -> str:
+    """`[約翰福音 3:16](https://bible.fhl.net/...)` → `約翰福音 3:16`.
+
+    Loops because historical rows may hold nested links produced by the old
+    non-idempotent linkifier, e.g. `[以賽亞[書11:1](...)](...)`.
+    """
+    prev = None
+    while prev != text:
+        prev = text
+        text = _FHL_LINK_RE.sub(lambda m: m.group(1), text)
+    return text
+
+
 def get_api_history(conv_id: str) -> list[dict]:
     """Clean role/content pairs to replay as `history` to bible_query()."""
     with _connect() as conn:
@@ -193,7 +220,14 @@ def get_api_history(conv_id: str) -> list[dict]:
             " WHERE conversation_id = ? ORDER BY id",
             (conv_id,),
         ).fetchall()
-        return [{"role": r["role"], "content": r["content"]} for r in rows]
+        return [
+            {
+                "role": r["role"],
+                "content": (_strip_fhl_links(r["content"])
+                            if r["role"] == "assistant" else r["content"]),
+            }
+            for r in rows
+        ]
 
 
 def append_turn(

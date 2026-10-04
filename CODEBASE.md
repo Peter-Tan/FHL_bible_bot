@@ -39,6 +39,7 @@
 | `scripts/test_zh_hant.py` | 字元表的回歸測試（`.venv/bin/python scripts/test_zh_hant.py`）。 |
 | `scripts/test_linkify.py` | 連結後處理的回歸測試（`.venv/bin/python scripts/test_linkify.py`）：冪等性、巢狀連結拆解、無法重建的連結必須保留，並拿整個 `chat.db` 做語料回歸。 |
 | `scripts/repair_verse_links.py` | 一次性修復 `chat.db` 內既有的壞連結（預設 dry run，`--apply` 才寫入，寫入前自動備份）。2026-09-06 已對正式資料庫執行過一次。 |
+| `scripts/repair_usage_cost.py` | 一次性修正 `usage_log.cost_usd`：2026-09-01～10-04 的 `claude-sonnet-5` 列誤用已取消的 $3/$15 計價，依各列 token 重算為 $2/$10（web_search 費用原樣保留；只動仍符合舊計價的列，可重複執行）。預設 dry run，`--apply` 寫入前自動備份。2026-10-04 已對正式資料庫執行（69 列，−$1.79）。 |
 | `scripts/app.py` | 舊版 Gradio 應用（舊正式環境、port 7860、import v3）。 |
 | `web/` | React 18 + Vite + Tailwind SPA（TypeScript）。 |
 | `e2e/` | 端對端驗證腳本（Node，無額外相依）。 |
@@ -401,7 +402,7 @@ lucide-react 圖示。建置為靜態檔（`npm run build` = `tsc -b && vite bui
   使用的 `model` 查 `PRICE_PER_MTOK`（Sonnet 5 與 Sonnet 5.5 皆為 $2/$10，
   cache write 2.50、cache read 0.20），查不到的模型用 `DEFAULT_PRICE`。
   Sonnet 5 原訂 2026-09-01 漲到 $3/$15，後來取消；舊版程式碼照樣切換，所以
-  2026-09-01～2026-10-04 存下的列高估 50%。**在查詢當下計算**並存入資料庫。web_search 次數
+  2026-09-01～2026-10-04 存下的列高估 50%，已由 `scripts/repair_usage_cost.py` 修正。**在查詢當下計算**並存入資料庫。web_search 次數
   （`usage["web_search"]`，v7 起）另以 `WEB_SEARCH_PRICE_PER_QUERY`
   （$10/1,000 次）計入。
 - **換模型時**記得在 `PRICE_PER_MTOK` 加上新模型的費率 —

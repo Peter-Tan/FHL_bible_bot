@@ -77,31 +77,25 @@ router = APIRouter(prefix="/api")
 MAX_CONCURRENT_QUERIES = int(os.environ.get("FHL_MAX_CONCURRENT", "10"))
 _active_queries = 0  # mutated only on the event loop — no lock needed
 
-# Claude Sonnet 5 pricing, USD per million tokens. Introductory pricing
-# ($2/$10) applies through 2026-08-31, standard ($3/$15) after. Cache writes
-# cost 1.25x the input rate, cache reads 0.1x. Cost is computed at query time
-# with the rate in effect that day, so stored rows stay historically accurate.
-SONNET5_INTRO_UNTIL = "2026-08-31"
-PRICE_PER_MTOK_INTRO = {
-    "input": 2.00,
-    "output": 10.00,
-    "cache_write": 2.50,
-    "cache_read": 0.20,
+# Claude pricing per model, USD per million tokens (platform.claude.com/docs
+# pricing, checked 2026-10-04). Cache writes are the 5-minute rate (1.25x
+# input), cache reads 0.1x. Sonnet 5's $2/$10 launch price was announced as
+# introductory with a rise to $3/$15 on 2026-09-01; that rise was cancelled
+# and $2/$10 became standard. Sonnet 5.5 launched at the same rates.
+# Rows are priced at query time by the model that actually ran, so each
+# engine can pin its own model. Unknown models fall back to DEFAULT_PRICE.
+PRICE_PER_MTOK = {
+    "claude-sonnet-5":   {"input": 2.00, "output": 10.00, "cache_write": 2.50, "cache_read": 0.20},
+    "claude-sonnet-5-5": {"input": 2.00, "output": 10.00, "cache_write": 2.50, "cache_read": 0.20},
 }
-PRICE_PER_MTOK_STANDARD = {
-    "input": 3.00,
-    "output": 15.00,
-    "cache_write": 3.75,
-    "cache_read": 0.30,
-}
+DEFAULT_PRICE = PRICE_PER_MTOK["claude-sonnet-5-5"]
+
 # Anthropic web_search server tool: $10 per 1,000 searches (tokens billed
 # separately above). Count comes from usage["web_search"] (v7 engine).
 WEB_SEARCH_PRICE_PER_QUERY = 10.00 / 1_000
 
 
 def _estimate_cost_usd(usage: dict) -> float:
-    from datetime import date
-
     # Locally served models are free. Without this guard a v8 row would be
     # priced at Sonnet rates and silently inflate the 用量統計 totals.
     # usage_log.model still records the real model id, so per-model
@@ -109,11 +103,7 @@ def _estimate_cost_usd(usage: dict) -> float:
     if str(usage.get("model", "")).startswith("gemma-"):
         return 0.0
 
-    price = (
-        PRICE_PER_MTOK_INTRO
-        if date.today().isoformat() <= SONNET5_INTRO_UNTIL
-        else PRICE_PER_MTOK_STANDARD
-    )
+    price = PRICE_PER_MTOK.get(usage.get("model", ""), DEFAULT_PRICE)
     return (
         usage.get("uncached_in", 0) * price["input"]
         + usage.get("out", 0) * price["output"]

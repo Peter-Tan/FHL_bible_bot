@@ -1,6 +1,6 @@
 # 📖 信望愛 AI 聖經助手 — FHL Bible Bot
 
-[信望愛（Faith, Hope, Love）](https://www.fhl.net/) 的 agentic 聖經研究助手。使用者以自然語言提問，Claude（Sonnet 5）自主呼叫 13 個針對 [信望愛聖經 API](https://bible.fhl.net/) 的專用工具 — 經文、希臘文/希伯來文原文分析、Strong's 字典、註釋、關鍵字搜尋 — 並整合成一篇附引用的回答；經文引用會自動連結回 bible.fhl.net（傳統版閱讀頁）或 tech.fhl.net/vui（新版界面）。
+[信望愛（Faith, Hope, Love）](https://www.fhl.net/) 的 agentic 聖經研究助手。使用者以自然語言提問，Claude（Sonnet 5.5）自主呼叫 13 個針對 [信望愛聖經 API](https://bible.fhl.net/) 的專用工具 — 經文、希臘文/希伯來文原文分析、Strong's 字典、註釋、關鍵字搜尋 — 並整合成一篇附引用的回答；經文引用會自動連結回 bible.fhl.net（傳統版閱讀頁）或 tech.fhl.net/vui（新版界面）。
 
 > 另有一個**實驗性**引擎 `claude_bible_rag_v7.py`，為「信仰 vs. 當代議題」加入**限定 fhl.net 網域**的 web search，但**目前不用於正式環境**——2026-08-20 的評測（見 `scripts/eval/`）顯示它在當代議題上會錯誤歸屬／捏造文章引文，faithfulness 與 coverage 反而下降且成本上升。正式環境使用 v6。
 
@@ -31,10 +31,10 @@
 FastAPI（server/）── SQLite logs/chat.db（users/conversations/messages/feedback/usage_log）
    │  bible_query()
    ▼
-RAG 引擎（scripts/claude_bible_rag_v6.py，正式）
+RAG 引擎（scripts/claude_bible_rag_v6_1.py，正式）
    │  Anthropic Messages API（tool_use 迴圈、prompt caching、串流）
    ▼                              ▲
-Claude Sonnet 5 ──工具呼叫──▶  fhl_tools.py（13 個工具）
+Claude Sonnet 5.5 ─工具呼叫─▶  fhl_tools.py（13 個工具）
                                   │  HTTP GET
                                   ▼
                           bible.fhl.net/json/*.php
@@ -90,9 +90,9 @@ cd web && npm run build                         # 前端變更後（不需重啟
 | 項目 | 位置 | 預設值 |
 |---|---|---|
 | Anthropic API key | `.env` → `ANTHROPIC_API_KEY` | — |
-| 模型 | `.env` → `FHL_V4_MODEL_ID` | `claude-sonnet-5` |
+| 模型 | 引擎檔 → `MODEL_ID`（`.env` 的 `FHL_V4_MODEL_ID` 僅供緊急覆寫） | `claude-sonnet-5-5` |
 | 並行查詢上限 | 環境變數 `FHL_MAX_CONCURRENT` | 10 |
-| Token 定價（成本估算） | `server/chat.py` → `PRICE_PER_MTOK_*` | Sonnet 5 intro→standard 依日期切換 |
+| Token 定價（成本估算） | `server/chat.py` → `PRICE_PER_MTOK` | 依模型查表（Sonnet 5／5.5：$2/$10） |
 | Web search（僅實驗引擎 v7） | `.env` → `FHL_V7_WEB_SEARCH`；`scripts/claude_bible_rag_v7.py` → `WEB_SEARCH_TOOL` | 僅 fhl.net、每次最多 3 次（$10/1,000 次）；正式 v6 不含此功能 |
 | 經文連結新版 endpoint | `web/src/lib/verseLinks.ts` → `VUI_BIBLE_BASE` | `https://tech.fhl.net/vui/#/bible/` |
 | 經文連結預設模式 | `web/src/lib/verseLinks.ts` → `DEFAULT_VERSE_LINK_MODE` | `"traditional"` |

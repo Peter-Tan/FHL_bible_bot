@@ -4,14 +4,12 @@ Mirrors server/chat.py's constants (kept separate so the eval never imports
 FastAPI code). Engine runs are priced by the model recorded in usage; the
 judge is priced at Claude Opus 5 rates.
 """
-from datetime import date
-
-SONNET5_INTRO_UNTIL = "2026-08-31"
-
 # USD per million tokens: (input, output, cache_write, cache_read)
+# Sonnet 5's announced 2026-09-01 rise to $3/$15 was cancelled; Sonnet 5.5
+# launched at the same $2/$10.
 ENGINE_PRICES = {
-    "claude-sonnet-5-intro":    (2.00, 10.00, 2.50, 0.20),
-    "claude-sonnet-5-standard": (3.00, 15.00, 3.75, 0.30),
+    "claude-sonnet-5":   (2.00, 10.00, 2.50, 0.20),
+    "claude-sonnet-5-5": (2.00, 10.00, 2.50, 0.20),
 }
 JUDGE_PRICE = (5.00, 25.00, 6.25, 0.50)  # claude-opus-5
 
@@ -37,15 +35,8 @@ def engine_cost_usd(usage: dict) -> float:
     # price it at Sonnet rates and make the report's cost column meaningless.
     if str(model).startswith("gemma-"):
         return 0.0
-    if model == "claude-sonnet-5":
-        key = ("claude-sonnet-5-intro"
-               if date.today().isoformat() <= SONNET5_INTRO_UNTIL
-               else "claude-sonnet-5-standard")
-        price = ENGINE_PRICES[key]
-    else:
-        # Unknown model (FHL_V4_MODEL_ID override): fall back to standard
-        # Sonnet rates and flag it so the report can warn.
-        price = ENGINE_PRICES["claude-sonnet-5-standard"]
+    # Unknown model (FHL_V4_MODEL_ID override): fall back to Sonnet 5.5 rates.
+    price = ENGINE_PRICES.get(model, ENGINE_PRICES["claude-sonnet-5-5"])
     return (_token_cost(usage, price)
             + usage.get("web_search", 0) * WEB_SEARCH_PER_QUERY)
 

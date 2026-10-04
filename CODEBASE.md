@@ -117,8 +117,10 @@
 
 ### `claude_bible_rag_v6_1.py` — 現行正式引擎（v6.1）
 
-關鍵常數（檔案開頭）：`MODEL_ID`（預設 `claude-sonnet-5`，可用環境變數
-`FHL_V4_MODEL_ID` 覆寫 — 刻意與 v3 的 `FHL_MODEL_ID` 分開）、
+關鍵常數（檔案開頭）：`MODEL_ID`（預設 `claude-sonnet-5-5`，2026-10-04 從
+Sonnet 5 換上，同價；模型寫死在各引擎檔內，因為 v4–v7.1 共用
+`FHL_V4_MODEL_ID`，設在 `.env` 會跨引擎帶著走 — 該變數只留作緊急覆寫／回滾，
+且刻意與 v3 的 `FHL_MODEL_ID` 分開）、
 `MAX_TOOL_ROUNDS = 10`、`STYLE_INSTRUCTIONS`（簡潔／詳盡 system 區塊）、
 `FHL_READ_URL`／`LINK_VERSION`（經文連結目標）。
 
@@ -395,14 +397,14 @@ lucide-react 圖示。建置為靜態檔（`npm run build` = `tsc -b && vite bui
 
 - 引擎經由 `usage_out` 回報每筆查詢的累計 token（每一輪 API 後更新，
   出錯也保得住部分用量）。
-- `server/chat.py::_estimate_cost_usd()` 把 token 換算成 USD：
-  `SONNET5_INTRO_UNTIL = 2026-08-31` 之前用 `PRICE_PER_MTOK_INTRO`
-  （$2/$10，cache write 2.50、cache read 0.20），之後用
-  `PRICE_PER_MTOK_STANDARD`（$3/$15/3.75/0.30）。**在查詢當下計算**，
-  所以已存的列保留歷史上正確的費率。web_search 次數
+- `server/chat.py::_estimate_cost_usd()` 把 token 換算成 USD：依該筆實際
+  使用的 `model` 查 `PRICE_PER_MTOK`（Sonnet 5 與 Sonnet 5.5 皆為 $2/$10，
+  cache write 2.50、cache read 0.20），查不到的模型用 `DEFAULT_PRICE`。
+  Sonnet 5 原訂 2026-09-01 漲到 $3/$15，後來取消；舊版程式碼照樣切換，所以
+  2026-09-01～2026-10-04 存下的列高估 50%。**在查詢當下計算**並存入資料庫。web_search 次數
   （`usage["web_search"]`，v7 起）另以 `WEB_SEARCH_PRICE_PER_QUERY`
   （$10/1,000 次）計入。
-- **換模型時**（`FHL_V4_MODEL_ID`）記得更新這些常數 —
+- **換模型時**記得在 `PRICE_PER_MTOK` 加上新模型的費率 —
   每列的 `model` 欄位讓舊資料仍可歸因。
 - 顯示於側欄 用量統計 modal（`GET /api/usage`）：本月＋累計、
   個人＋全站。統計自 2026-07 開始 — 更早的對話沒有記錄。
@@ -414,9 +416,10 @@ lucide-react 圖示。建置為靜態檔（`npm run build` = `tsc -b && vite bui
 | 調整桿 | 位置 | 效果 |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | `.env` | Anthropic 認證（僅伺服器端）。 |
-| `FHL_V4_MODEL_ID` | `.env` | 新 UI 的模型（預設 `claude-sonnet-5`）。v3/Gradio 用的是另一個 `FHL_MODEL_ID`。 |
+| `MODEL_ID` | 各引擎檔（v6.1：`claude-sonnet-5-5`） | 新 UI 的模型，每個引擎各自寫死。 |
+| `FHL_V4_MODEL_ID` | `.env`（正常不設） | 緊急覆寫 v4–v7.1 所有引擎的模型。v3/Gradio 用的是另一個 `FHL_MODEL_ID`。 |
 | `FHL_MAX_CONCURRENT` | service 環境變數 | 並行查詢上限（預設 10，超過回 429）。 |
-| `PRICE_PER_MTOK_INTRO/STANDARD`、`SONNET5_INTRO_UNTIL` | `server/chat.py` | 成本估算。 |
+| `PRICE_PER_MTOK`、`DEFAULT_PRICE` | `server/chat.py` | 成本估算（依模型）。 |
 | `FHL_V7_WEB_SEARCH` | `.env` | 設 `0` 停用 fhl.net web search（僅對 v7 實驗引擎有效）。 |
 | `MAX_TOOL_ROUNDS` | `claude_bible_rag_v6_1.py` | Agentic 輪數硬上限。 |
 | `WEB_SEARCH_TOOL`（`max_uses`、`allowed_domains`） | `claude_bible_rag_v7.py`（實驗，未上線） | 每次查詢的搜尋次數上限與網域白名單。 |
@@ -524,7 +527,7 @@ commit 前先跑 e2e。
 |---|---|---|
 | Service | `fhl-bible-ui.service`（systemd --user） | `fhl-bible-bot.service` |
 | Port | 7861 | 7860 |
-| 引擎／模型 | v6／Sonnet 5（`FHL_V4_MODEL_ID`；v7 實驗未上線） | v3／Opus 4.7（`FHL_MODEL_ID`） |
+| 引擎／模型 | v6.1／Sonnet 5.5（`MODEL_ID` 寫在引擎檔；v7 實驗未上線） | v3／Opus 4.7（`FHL_MODEL_ID`） |
 | 公開路徑 | `tech.fhl.net/bible_bot/` | `tech.fhl.net/bible_tool_bot/` |
 
 日常操作：

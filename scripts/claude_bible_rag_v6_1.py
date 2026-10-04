@@ -40,7 +40,7 @@ chat.db 338 篇回答中有 43 篇受影響。
 文字（移除模型模仿的對象，順帶少送約 32% 的 history 字元）；
 scripts/repair_verse_links.py 修復 chat.db 既有的壞資料；
 scripts/test_linkify.py 是回歸測試（含整個 chat.db 的語料回歸）。
-claude_bible_rag_v6_1.py — Claude Sonnet 5 × FHL Bible Tools (agentic RAG engine)
+claude_bible_rag_v6_1.py — Claude Sonnet 5.5 × FHL Bible Tools (agentic RAG engine)
 ===============================================================================
 Drop-in replacement for bible_rag.bible_query() that uses the Anthropic API
 instead of a local Gemma model.  Same tool set (fhl_tools.py), same interface.
@@ -194,9 +194,12 @@ from zh_hant import to_traditional
 # 1. SETTINGS
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Override without code changes: set FHL_V4_MODEL_ID in .env.
+# Model pinned per engine: v4–v7.1 all read FHL_V4_MODEL_ID, so setting it in
+# .env would carry one model across every engine FHL_ENGINE switches to. Leave
+# it unset; it is only an emergency override (=claude-sonnet-5 rolls back).
+# Sonnet 5 → 5.5 on 2026-10-04 (same price; v6/v7 experiments stay on 5).
 # (Deliberately NOT FHL_MODEL_ID — that var belongs to production v3.)
-MODEL_ID        = os.environ.get("FHL_V4_MODEL_ID", "claude-sonnet-5")
+MODEL_ID        = os.environ.get("FHL_V4_MODEL_ID", "claude-sonnet-5-5")
 MAX_TOOL_ROUNDS = 10
 RESULT_PREVIEW  = 300
 

@@ -334,15 +334,21 @@ def search_strongs_occurrences(
     Returns:
         JSON dict with 'record' list of verses.
     """
-    # FHL's se.php wants the BARE digits (no G/H prefix) with orig=1.
-    # Letter prefix is inferred from RANGE (NT for Greek, OT for Hebrew).
+    # FHL's se.php wants the BARE digits (no prefix); the language is chosen
+    # by `orig`: 1 = Greek (NT), 2 = Hebrew (OT). orig=1 with a Hebrew number
+    # returns nothing — that was the old bug. Accept G26 / H2617 and the
+    # SNG00026 / SNH02617 form the engines' prompts tell the model to write.
     s = strongs_number.strip().upper()
-    num = s[1:].lstrip("0") or "0" if s.startswith(("G", "H")) else s
-    params = {"q": num, "orig": 1, "VERSION": version, "limit": limit, "gb": 0}
-    if s.startswith("G"):
-        params["RANGE"] = 1
-    elif s.startswith("H"):
-        params["RANGE"] = 2
+    if s.startswith("SN"):
+        s = s[2:]
+    if s.startswith(("G", "H")):
+        lang, digits = s[0], s[1:]
+    else:
+        lang, digits = "G", s  # bare number: keep the old Greek default
+    num = digits.lstrip("0") or "0"
+    s = f"{lang}{num}"
+    orig = 2 if lang == "H" else 1
+    params = {"q": num, "orig": orig, "VERSION": version, "limit": limit, "gb": 0}
     data = _get("se", params)
     if "error" in data:
         return data

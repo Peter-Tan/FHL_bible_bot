@@ -17,6 +17,7 @@ import { useConversation } from "./hooks/useConversation";
 import type { AnswerStyle } from "./api/types";
 import { ChatInput } from "./components/ChatInput";
 import { ChatMessage } from "./components/ChatMessage";
+import { ConversationToolbar } from "./components/ConversationToolbar";
 import { Sidebar } from "./components/Sidebar";
 
 const STYLE_STORAGE_KEY = "fhl_answer_style";
@@ -159,6 +160,14 @@ export default function App() {
         />
 
         <main className="flex min-w-0 flex-1 flex-col">
+          <ConversationToolbar
+            title={
+              conversations.find((c) => c.id === currentId)?.title ?? "對話"
+            }
+            messages={messages}
+            disabled={isStreaming || isLoading}
+            verseLinkMode={verseLinkMode}
+          />
           <div
             ref={scrollRef}
             onScroll={handleScroll}

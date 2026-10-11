@@ -1,8 +1,11 @@
-import type { ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Message } from "../api/types";
-import { transformVerseHref, type VerseLinkMode } from "../lib/verseLinks";
+import {
+  childrenToText,
+  transformVerseHref,
+  type VerseLinkMode,
+} from "../lib/verseLinks";
 import { MessageActions } from "./MessageActions";
 import { ToolCallLog } from "./ToolCallLog";
 
@@ -12,14 +15,6 @@ interface Props {
   isStreaming: boolean;
   /** How verse citations should link out (傳統版 read.php or 新版 vui). */
   verseLinkMode: VerseLinkMode;
-}
-
-/** Flatten an anchor's React children to plain text (citation like "約翰福音 3:16"). */
-function childrenToText(children: ReactNode): string {
-  if (typeof children === "string") return children;
-  if (typeof children === "number") return String(children);
-  if (Array.isArray(children)) return children.map(childrenToText).join("");
-  return "";
 }
 
 export function ChatMessage({ message, isStreaming, verseLinkMode }: Props) {
@@ -75,7 +70,7 @@ export function ChatMessage({ message, isStreaming, verseLinkMode }: Props) {
         ) : isStreaming && !message.tool_log ? (
           <div className="text-[15px] text-zinc-400">思考中…</div>
         ) : null}
-        {!isStreaming && hasText && <MessageActions message={message} />}
+        {!isStreaming && hasText && <MessageActions message={message} verseLinkMode={verseLinkMode} />}
       </div>
     </div>
   );

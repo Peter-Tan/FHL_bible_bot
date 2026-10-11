@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 /**
  * Verse-link display mode. Stored answers always contain traditional
  * bible.fhl.net/new/read.php URLs (built server-side in
@@ -63,4 +65,12 @@ export function transformVerseHref(
   } catch {
     return href; // malformed URL — leave as-is
   }
+}
+
+/** Flatten an anchor's React children to plain text (citation like "約翰福音 3:16"). */
+export function childrenToText(children: ReactNode): string {
+  if (typeof children === "string") return children;
+  if (typeof children === "number") return String(children);
+  if (Array.isArray(children)) return children.map(childrenToText).join("");
+  return "";
 }

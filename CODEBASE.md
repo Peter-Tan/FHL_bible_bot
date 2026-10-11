@@ -299,12 +299,14 @@ lucide-react 圖示。建置為靜態檔（`npm run build` = `tsc -b && vite bui
 | `src/api/types.ts` | 全部共用型別（`Message`、`UsageResponse`…）。 |
 | `src/hooks/useConversation.ts` | 掌管當前聊天：載入歷史、樂觀 UI、delta 串流、中止／重新掛接。 |
 | `src/lib/liveStreams.ts` | 以對話 id 為 key、放在 React **之外**的進行中串流 — 回答中切換對話不會中止；切回來即時重新掛接。 |
-| `src/lib/verseLinks.ts` | **經文連結設定模組。** `DEFAULT_VERSE_LINK_MODE` 與 `VUI_BIBLE_BASE` 兩個可調常數、localStorage 持久化，以及 `transformVerseHref()` — 渲染時把儲存的 `read.php` href 改寫為 `tech.fhl.net/vui/#/bible/書卷章[:節]`。節錨點是從引用**文字**還原的（儲存的 href 只有章）。非 read.php 連結原樣通過。 |
+| `src/lib/verseLinks.ts` | **經文連結設定模組。** `DEFAULT_VERSE_LINK_MODE` 與 `VUI_BIBLE_BASE` 兩個可調常數、localStorage 持久化，以及 `transformVerseHref()` — 渲染時把儲存的 `read.php` href 改寫為 `tech.fhl.net/vui/#/bible/書卷章[:節]`。節錨點是從引用**文字**還原的（儲存的 href 只有章）。非 read.php 連結原樣通過。另提供 `childrenToText()`（ChatMessage 與 richCopy 共用）。 |
+| `src/lib/richCopy.ts` | **富文字複製。** `markdownToHtml()`（`renderToStaticMarkup`＋同一套 vui 改寫）、`markdownToPlain()`、`conversationToClipboard()`（問／答 格式），以及 `copyRich()` — 同時寫入 `text/html`＋`text/plain`，貼到 Word／PPT 時經文為超連結而非長網址；http:// 環境改用 `execCommand` fallback。 |
 | `src/components/Sidebar.tsx` | 對話清單、經文連結 傳統版／新版 切換、用量統計 按鈕＋modal（本月＋累計費用）。 |
 | `src/components/ChatMessage.tsx` | 訊息泡泡＋markdown 渲染。`a` renderer 套用 `transformVerseHref` 並強制 `target="_blank"`。 |
 | `src/components/ChatInput.tsx` | 自動伸縮 textarea、IME 組字保護（打中文不會中途送出）、簡潔／詳盡 切換、停止按鈕。 |
 | `src/components/ToolCallLog.tsx` | 可摺疊 🔧 工具呼叫記錄 — 工具執行中展開、回答開始後自動收合。 |
-| `src/components/MessageActions.tsx` | 複製／👍／👎／留言 → feedback endpoint。 |
+| `src/components/MessageActions.tsx` | 複製（富文字，含超連結）／👍／👎／留言 → feedback endpoint。 |
+| `src/components/ConversationToolbar.tsx` | 對話區右上角：ⓘ 保存說明 popover（紀錄綁定 cookie、180 天，請自行備份）＋「複製全部」整段對話。 |
 
 值得記住的設計決策：經文連結改寫是**瀏覽器端渲染時**進行（不改儲存內容），
 所以 傳統版／新版 設定對舊對話同樣生效，endpoint 變更也永遠不需要資料遷移。

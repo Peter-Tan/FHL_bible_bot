@@ -9,31 +9,18 @@ import {
 } from "lucide-react";
 import { sendFeedback } from "../api/client";
 import type { Message } from "../api/types";
+import { copyRich, markdownToHtml, markdownToPlain } from "../lib/richCopy";
+import type { VerseLinkMode } from "../lib/verseLinks";
 
 interface Props {
   message: Message;
-}
-
-async function copyText(text: string): Promise<void> {
-  if (navigator.clipboard && window.isSecureContext) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-  // http:// fallback (clipboard API needs a secure context)
-  const ta = document.createElement("textarea");
-  ta.value = text;
-  ta.style.position = "fixed";
-  ta.style.opacity = "0";
-  document.body.appendChild(ta);
-  ta.select();
-  document.execCommand("copy");
-  document.body.removeChild(ta);
+  verseLinkMode: VerseLinkMode;
 }
 
 const btnBase =
   "flex items-center gap-1 rounded-md px-1.5 py-1 text-xs transition-colors";
 
-export function MessageActions({ message }: Props) {
+export function MessageActions({ message, verseLinkMode }: Props) {
   const [copied, setCopied] = useState(false);
   const [rating, setRating] = useState<"good" | "bad" | null>(
     message.rating ?? null,
@@ -52,7 +39,11 @@ export function MessageActions({ message }: Props) {
 
   const handleCopy = async () => {
     try {
-      await copyText(message.content);
+      // Copied as rich text so verse links paste into Word/PPT as hyperlinks.
+      await copyRich(
+        markdownToHtml(message.content, verseLinkMode),
+        markdownToPlain(message.content),
+      );
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
       log("copy");

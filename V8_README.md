@@ -34,6 +34,7 @@ React/JS 介面**（`web/`，走 FastAPI 7861 + SSE）。
 | **`V8_README.md`**（本檔） | 怎麼跑、怎麼用、怎麼關、現況與已知問題 | **先讀我** |
 | [`V8_CODEBASE.md`](V8_CODEBASE.md) | 每一支與 v8 有關的程式碼在做什麼（含測試集與評估套件） | 要改程式前 |
 | [`V8_DGX_SPARK.md`](V8_DGX_SPARK.md) | 搬到 DGX-SPARK 的注意事項、逐步待辦、JS 需修改處 | 要遷移／上線前 |
+| [`V8_SPARK_LOCAL_SETUP.md`](V8_SPARK_LOCAL_SETUP.md) | DGX Spark 實機安裝：共用現有 vLLM（:8000）跑 bot 的步驟與踩坑 | 在 Spark 上把 bot 跑起來 |
 
 專案層級的既有文件（**不是 v8 專屬**，但遲早要讀）：
 

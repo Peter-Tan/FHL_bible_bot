@@ -100,7 +100,9 @@ def _estimate_cost_usd(usage: dict) -> float:
     # priced at Sonnet rates and silently inflate the 用量統計 totals.
     # usage_log.model still records the real model id, so per-model
     # attribution survives and Claude rows keep their historical rates.
-    if str(usage.get("model", "")).startswith("gemma-"):
+    # Match on the last path segment: vLLM may serve the HF repo id as-is
+    # (e.g. "google/gemma-4-26B-A4B-it" when --served-model-name is unset).
+    if str(usage.get("model", "")).rsplit("/", 1)[-1].startswith("gemma-"):
         return 0.0
 
     price = PRICE_PER_MTOK.get(usage.get("model", ""), DEFAULT_PRICE)

@@ -272,7 +272,10 @@ def get_word_analysis(book: str, chapter: int, verse: int) -> dict:
         verse: Verse number.
 
     Returns:
-        JSON dict with 'record' list. Each entry has 'word' (original text).
+        JSON dict with 'verse_text' (original), 'verse_translation' (FHL's
+        literal Chinese rendering) and a 'words' list. Each word has 'word'
+        (inflected form), 'lemma' (dictionary form), 'strongs' (SNH#####/
+        SNG##### — pass it to lookup_strongs), 'parsing' and 'gloss' (中文字義).
     """
     data = _get("qp", {
         "engs": _to_engs(book),
@@ -280,10 +283,27 @@ def get_word_analysis(book: str, chapter: int, verse: int) -> dict:
     })
     if "error" in data:
         return data
-    return {"words": [
-        {"word": r.get("word", ""), "strongs": r.get("exp", "")}
-        for r in data.get("record", [])
-    ]}
+    # qp.php: top-level N is 1 for Hebrew (OT), 0 for Greek (NT). Record wid=0
+    # is the whole verse (original + translation), not a word. Per word, the
+    # Strong's number is 'sn' and 'exp' is only the Chinese gloss — the old
+    # code returned 'exp' under the key 'strongs', so the model never saw a
+    # single Strong's number from this tool and guessed them from memory.
+    lang = "H" if str(data.get("N", "")) == "1" else "G"
+    out: dict = {"words": []}
+    for r in data.get("record", []):
+        if r.get("wid") == 0:
+            out["verse_text"] = r.get("word", "")
+            out["verse_translation"] = r.get("exp", "")
+            continue
+        sn = str(r.get("sn") or "").strip()
+        out["words"].append({
+            "word": r.get("word", ""),
+            "lemma": r.get("orig", ""),
+            "strongs": f"SN{lang}{int(sn):05d}" if sn.isdigit() and int(sn) else "",
+            "parsing": " ".join(x for x in (r.get("pro", ""), r.get("wform", "")) if x).strip(),
+            "gloss": r.get("exp", ""),
+        })
+    return out
 
 
 # ── 6. Strong's dictionary lookup ──────────────────────────────────────────────

@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from fhl_tools import _split_strongs, lookup_strongs  # noqa: E402
+from fhl_tools import _split_strongs, get_word_analysis, lookup_strongs  # noqa: E402
 
 CASES = [
     # (input, default_lang, expected)
@@ -45,6 +45,20 @@ if "--live" in sys.argv:
         if want_sn not in sns:
             failures += 1
             print(f"FAIL lookup_strongs({raw!r}) → {sns}, want {want_sn}")
+
+    # get_word_analysis must expose real Strong's codes (it used to return the
+    # Chinese gloss under 'strongs'), and they must round-trip to lookup_strongs.
+    # (Matched by gloss, not lemma: FHL's Greek accents are not NFC-stable.)
+    for book, chap, verse, gloss, want in [("創世記", 22, 2, "說、回答、承諾、吩咐", "SNH00559"),
+                                           ("約翰福音", 3, 16, "愛", "SNG00025")]:
+        words = get_word_analysis(book, chap, verse).get("words", [])
+        got = next((w["strongs"] for w in words if w["gloss"] == gloss), None)
+        if got != want:
+            failures += 1
+            print(f"FAIL get_word_analysis({book} {chap}:{verse}) {gloss} → {got}, want {want}")
+        elif want[3:] not in [e["sn"] for e in lookup_strongs(got).get("entries", [])]:
+            failures += 1
+            print(f"FAIL lookup_strongs({got!r}) did not return {want[3:]}")
 
 print("OK" if not failures else f"{failures} failure(s)")
 sys.exit(1 if failures else 0)

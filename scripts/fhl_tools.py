@@ -288,6 +288,26 @@ def get_word_analysis(book: str, chapter: int, verse: int) -> dict:
 
 # ── 6. Strong's dictionary lookup ──────────────────────────────────────────────
 
+def _split_strongs(strongs_number: str, default_lang: str) -> tuple:
+    """'G26' / 'H2617' / 'SNG00026' / 'SNH02617' / '26' → (lang, bare digits).
+
+    The engines' prompts tell the model to WRITE codes as SNG#####/SNH#####,
+    and models (Gemma especially) reuse that form as the tool argument. Both
+    Strong's tools must therefore accept it: before this helper,
+    lookup_strongs('SNH01285') read the leading 'S' as "not Greek" and sent
+    k='NH01285' to sd.php, which answers with the generic SN 00000 entry —
+    every v8 dictionary lookup in the 2026-11-08 eval came back empty.
+    A bare number keeps each tool's historical default language.
+    """
+    s = strongs_number.strip().upper()
+    if s.startswith("SN"):
+        s = s[2:]
+    if s[:1] in ("G", "H"):
+        lang, digits = s[0], s[1:]
+    else:
+        lang, digits = default_lang, s
+    return lang, digits.lstrip("0") or "0"
+
 def lookup_strongs(strongs_number: str) -> dict:
     """
     Strong's Concordance entry for a Hebrew or Greek word.
@@ -302,10 +322,9 @@ def lookup_strongs(strongs_number: str) -> dict:
         JSON dict with 'record' list containing 'sn' and 'dic_text'
         (the dictionary entry body).
     """
-    s = strongs_number.strip().upper()
+    lang, num = _split_strongs(strongs_number, default_lang="H")
     # sd.php: N=0 → Greek (NT), N=1 → Hebrew (OT)
-    lang_code = 0 if s.startswith("G") else 1
-    num = s[1:].lstrip("0") or "0"
+    lang_code = 0 if lang == "G" else 1
     data = _get("sd", {"N": lang_code, "k": num, "gb": 0})
     if "error" in data:
         return data
@@ -336,16 +355,8 @@ def search_strongs_occurrences(
     """
     # FHL's se.php wants the BARE digits (no prefix); the language is chosen
     # by `orig`: 1 = Greek (NT), 2 = Hebrew (OT). orig=1 with a Hebrew number
-    # returns nothing — that was the old bug. Accept G26 / H2617 and the
-    # SNG00026 / SNH02617 form the engines' prompts tell the model to write.
-    s = strongs_number.strip().upper()
-    if s.startswith("SN"):
-        s = s[2:]
-    if s.startswith(("G", "H")):
-        lang, digits = s[0], s[1:]
-    else:
-        lang, digits = "G", s  # bare number: keep the old Greek default
-    num = digits.lstrip("0") or "0"
+    # returns nothing — that was the old bug.
+    lang, num = _split_strongs(strongs_number, default_lang="G")
     s = f"{lang}{num}"
     orig = 2 if lang == "H" else 1
     params = {"q": num, "orig": orig, "VERSION": version, "limit": limit, "gb": 0}

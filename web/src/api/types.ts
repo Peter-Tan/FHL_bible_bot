@@ -20,6 +20,12 @@ export type FeedbackAction = "copy" | "good" | "bad" | "comment";
 /** Answer style: 簡潔 (default) or 詳盡. Sent with every chat request. */
 export type AnswerStyle = "brief" | "comprehensive";
 
+/** GET /api/config — deployment-level defaults (set via .env on the server). */
+export interface AppConfig {
+  engine: string;
+  default_style: AnswerStyle;
+}
+
 export interface ConversationDetail extends ConversationSummary {
   created_at: string;
   messages: Message[];

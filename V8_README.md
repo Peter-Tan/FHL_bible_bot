@@ -365,6 +365,7 @@ nvidia-smi --query-gpu=memory.used --format=csv
 | `FHL_V8_TEMPERATURE` | `0.3` | 引用密集的 RAG 刻意調低（Google 官方預設是 1.0） |
 | `FHL_V8_TOP_P` | `0.95` | |
 | `FHL_V8_UI_PORT` | `7862` | Gradio 測試台 |
+| `FHL_DEFAULT_STYLE` | （未設 → v8* 為 `comprehensive`，其餘 `brief`） | 前端預設回答風格（使用者沒主動選過時）。本機 Gemma 沒有 token 費用，所以預設詳盡 |
 | `FHL_MAX_CONCURRENT` | `10` | FastAPI 同時處理的查詢上限，超過回 429 |
 | `PORT` | `8010` | serve.sh 的埠 |
 | `FHL_LOCAL_ENGINE` | — | 設為 `1` 時 `e2e/verify-chat.mjs` 放寬 `cost > 0` 斷言 |

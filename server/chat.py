@@ -70,6 +70,20 @@ _engine_module = importlib.import_module(ENGINE_MODULES[ENGINE])
 STYLE_INSTRUCTIONS = _engine_module.STYLE_INSTRUCTIONS
 bible_query = _engine_module.bible_query
 
+# DEFAULT ANSWER STYLE — what the UI pre-selects for users who never picked
+# one. Config, not code, for the same reason as FHL_ENGINE: both deployments
+# track main. Local Gemma (v8*) has no per-token cost, so it defaults to
+# "comprehensive"; Claude engines keep "brief" to hold API spend down.
+# `FHL_DEFAULT_STYLE` in .env overrides either; an invalid value is ignored.
+DEFAULT_STYLE = "comprehensive" if ENGINE.startswith("v8") else "brief"
+_style_env = (os.environ.get("FHL_DEFAULT_STYLE") or "").strip().lower()
+if _style_env:
+    if _style_env in STYLE_INSTRUCTIONS:
+        DEFAULT_STYLE = _style_env
+    else:
+        print(f"WARNING: unknown FHL_DEFAULT_STYLE={_style_env!r}; "
+              f"using {DEFAULT_STYLE}", file=sys.stderr)
+
 from fhl_tools import ALL_TOOLS  # noqa: E402
 
 router = APIRouter(prefix="/api")
@@ -136,7 +150,13 @@ def _log_usage(user_id: str, conv_id: str, usage: dict) -> None:
 class ChatRequest(BaseModel):
     conversation_id: str
     message: str
-    style: str = "brief"  # "brief" | "comprehensive"
+    style: str = DEFAULT_STYLE  # "brief" | "comprehensive"
+
+
+@router.get("/config")
+async def get_config():
+    """Deployment-level UI defaults (the engine is chosen by .env)."""
+    return {"engine": ENGINE, "default_style": DEFAULT_STYLE}
 
 
 def _sse(event: str, data: dict) -> str:

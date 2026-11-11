@@ -325,7 +325,7 @@ def delete_chat(state: UserSession):
 # ─── UI layout ───────────────────────────────────────────────────────────────
 
 with gr.Blocks(title="信望愛 AI 聖經助手", css=CSS, theme=gr.themes.Soft()) as demo:
-    gr.Markdown("## 📖 信望愛 AI 聖經助手 — Claude × FHL Bible Tools")
+    gr.Markdown("## 📖 信望愛 AI 聖經助手 — AI × FHL Bible Tools")
 
     state = gr.State(None)
     session_id_box = gr.Textbox(visible=False)  # holds session ID for JS cookie setter

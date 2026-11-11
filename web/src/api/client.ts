@@ -1,4 +1,5 @@
 import type {
+  AppConfig,
   ConversationDetail,
   ConversationSummary,
   FeedbackAction,
@@ -34,6 +35,8 @@ export const deleteConversation = (id: string) =>
   request<void>(`/conversations/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
+
+export const getConfig = () => request<AppConfig>("/config");
 
 export const getUsage = () => request<UsageResponse>("/usage");
 

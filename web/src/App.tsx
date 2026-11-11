@@ -4,6 +4,7 @@ import fhlLogo from "./FHLLOGO.webp";
 import {
   createConversation,
   deleteConversation,
+  getConfig,
   listConversations,
 } from "./api/client";
 import type { ConversationSummary } from "./api/types";
@@ -22,9 +23,12 @@ import { Sidebar } from "./components/Sidebar";
 
 const STYLE_STORAGE_KEY = "fhl_answer_style";
 
-function loadStyle(): AnswerStyle {
+// Only an explicit user choice is persisted. Without one, the deployment's
+// default (GET /api/config — "comprehensive" on local Gemma, "brief" on
+// Claude) applies once it loads; "brief" is the pre-load fallback.
+function loadSavedStyle(): AnswerStyle | null {
   const saved = localStorage.getItem(STYLE_STORAGE_KEY);
-  return saved === "comprehensive" ? "comprehensive" : "brief";
+  return saved === "brief" || saved === "comprehensive" ? saved : null;
 }
 
 export default function App() {
@@ -32,7 +36,9 @@ export default function App() {
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [appError, setAppError] = useState<string | null>(null);
-  const [answerStyle, setAnswerStyle] = useState<AnswerStyle>(loadStyle);
+  const [answerStyle, setAnswerStyle] = useState<AnswerStyle>(
+    () => loadSavedStyle() ?? "brief",
+  );
   const [verseLinkMode, setVerseLinkMode] =
     useState<VerseLinkMode>(loadVerseLinkMode);
 
@@ -40,6 +46,16 @@ export default function App() {
     setAnswerStyle(s);
     localStorage.setItem(STYLE_STORAGE_KEY, s);
   };
+
+  useEffect(() => {
+    if (loadSavedStyle()) return;
+    getConfig()
+      .then((cfg) => {
+        // Re-check: the user may have clicked a style while this was loading.
+        if (!loadSavedStyle()) setAnswerStyle(cfg.default_style);
+      })
+      .catch(() => {}); // keep the fallback; not worth an error toast
+  }, []);
 
   const handleVerseLinkModeChange = (m: VerseLinkMode) => {
     setVerseLinkMode(m);
@@ -141,7 +157,7 @@ export default function App() {
         <h1 className="leading-tight">
           <span className="block text-lg font-bold">信望愛 AI 聖經助手</span>
           <span className="block text-xs font-normal text-zinc-400">
-            Claude × FHL Bible Tools
+            AI × FHL Bible Tools
           </span>
         </h1>
       </header>

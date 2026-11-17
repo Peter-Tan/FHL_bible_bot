@@ -44,7 +44,7 @@
 | `web/` | React 18 + Vite + Tailwind SPA（TypeScript）。 |
 | `e2e/` | 端對端驗證腳本（Node，無額外相依）。 |
 | `logs/` | **執行期資料，已 gitignore**：`chat.db`（SQLite）＋舊版 JSON 備份。 |
-| `.env` | **密鑰與部署設定，已 gitignore**：`ANTHROPIC_API_KEY`、可選 `FHL_ENGINE`（`v6`／`v6.1`／`v7`／`v7.1`／`v8`／`v8.1`，未設＝`v6.1` 正式）、可選 `FHL_V4_MODEL_ID`、可選 `FHL_V7_WEB_SEARCH`（設 `0` 停用 web search）、v8 專用 `FHL_V8_BASE_URL`／`FHL_V8_MODEL_ID`、可選 `FHL_DEFAULT_STYLE`（`brief`／`comprehensive`；未設＝v8* 用 `comprehensive`（本機無 token 費用），其餘 `brief`）。 |
+| `.env` | **密鑰與部署設定，已 gitignore**：`ANTHROPIC_API_KEY`、可選 `FHL_ENGINE`（`v6`／`v6.1`／`v7`／`v7.1`／`v8`／`v8.1`，未設＝`v6.1` 正式）、可選 `FHL_V4_MODEL_ID`、可選 `FHL_V7_WEB_SEARCH`（設 `0` 停用 web search）、v8 專用 `FHL_V8_BASE_URL`／`FHL_V8_MODEL_ID`、可選 `FHL_DEFAULT_STYLE`（`brief`／`comprehensive`；未設＝所有引擎皆 `brief`）。 |
 | `nginx-bible_bot-snippet.conf` | 交給伺服器管理員貼進 nginx 的 location 區塊。 |
 | `.github/workflows/` | `ci.yml`（建置檢查；不需 secrets）。部署一律在伺服器上執行 `./deploy.sh`。 |
 
@@ -294,7 +294,7 @@ lucide-react 圖示。建置為靜態檔（`npm run build` = `tsc -b && vite bui
 
 | 檔案 | 角色 |
 |---|---|
-| `src/App.tsx` | 版面、header（FHL logo）、對話狀態、自動捲動、錯誤 toast。持有兩個持久化設定：回答風格（`fhl_answer_style`，只在使用者主動切換時才存；未存時採用 `GET /api/config` 的 `default_style`）與經文連結模式。 |
+| `src/App.tsx` | 版面、header（FHL logo）、對話狀態、自動捲動、錯誤 toast。持有兩個持久化設定：回答風格（`fhl_answer_style`，只在使用者主動切換時才存；未存時採用 `GET /api/config` 的 `default_style`）與經文連結模式。另以 `sessionStorage`（`fhl_current_conversation`）記住**本分頁**開啟的對話，重新載入（含瀏覽器丟棄閒置分頁後的自動重載）會回到同一個對話，而不是最近更新的那個。 |
 | `src/api/client.ts` | CRUD＋`getUsage()` 的型別化 fetch 包裝。`API_BASE` 取自 vite 的 `BASE_URL`。 |
 | `src/api/chatStream.ts` | 以 fetch POST 手寫的 SSE parser（處理 `tool_log/text_delta/done/error`，429 顯示友善訊息）。 |
 | `src/api/types.ts` | 全部共用型別（`Message`、`UsageResponse`…）。 |

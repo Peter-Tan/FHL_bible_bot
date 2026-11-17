@@ -72,10 +72,12 @@ bible_query = _engine_module.bible_query
 
 # DEFAULT ANSWER STYLE — what the UI pre-selects for users who never picked
 # one. Config, not code, for the same reason as FHL_ENGINE: both deployments
-# track main. Local Gemma (v8*) has no per-token cost, so it defaults to
-# "comprehensive"; Claude engines keep "brief" to hold API spend down.
-# `FHL_DEFAULT_STYLE` in .env overrides either; an invalid value is ignored.
-DEFAULT_STYLE = "comprehensive" if ENGINE.startswith("v8") else "brief"
+# track main. Every engine defaults to "brief" (v8* briefly defaulted to
+# "comprehensive" because local Gemma has no per-token cost; reverted
+# 2026-11-17 — shorter answers are also faster, which matters more under
+# concurrent load). `FHL_DEFAULT_STYLE` in .env overrides; an invalid value
+# is ignored.
+DEFAULT_STYLE = "brief"
 _style_env = (os.environ.get("FHL_DEFAULT_STYLE") or "").strip().lower()
 if _style_env:
     if _style_env in STYLE_INSTRUCTIONS:

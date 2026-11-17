@@ -139,7 +139,10 @@ export function useConversation(
 
   const send = useCallback(
     (text: string, style: AnswerStyle) => {
-      if (!conversationId || isStreaming) return;
+      // Not while history is loading: the fetch would then overwrite the
+      // optimistic turn, and the stream would be mirrored into the last
+      // message of the loaded history instead.
+      if (!conversationId || isStreaming || isLoading) return;
       if (getLiveStream(conversationId)) return; // one stream per conversation
       setError(null);
       setMessages((msgs) => [
@@ -149,7 +152,7 @@ export function useConversation(
       ]);
       attach(startLiveStream(conversationId, text, style, onTitleChange));
     },
-    [conversationId, isStreaming, onTitleChange, attach],
+    [conversationId, isStreaming, isLoading, onTitleChange, attach],
   );
 
   const stop = useCallback(() => {

@@ -23,9 +23,25 @@ import { Sidebar } from "./components/Sidebar";
 
 const STYLE_STORAGE_KEY = "fhl_answer_style";
 
+// Which conversation THIS TAB has open. sessionStorage is per-tab and
+// survives reloads — including the silent reload a browser performs after
+// discarding an idle background tab. Without it a reloaded tab fell back to
+// the most recently updated conversation, i.e. whatever ANOTHER tab had just
+// been chatting in, and the user's next question landed in that conversation
+// (with its history as model context).
+const CURRENT_CONV_KEY = "fhl_current_conversation";
+
+function loadSavedConversationId(): string | null {
+  try {
+    return sessionStorage.getItem(CURRENT_CONV_KEY);
+  } catch {
+    return null;
+  }
+}
+
 // Only an explicit user choice is persisted. Without one, the deployment's
-// default (GET /api/config — "comprehensive" on local Gemma, "brief" on
-// Claude) applies once it loads; "brief" is the pre-load fallback.
+// default (GET /api/config — "brief" unless FHL_DEFAULT_STYLE overrides it)
+// applies once it loads; "brief" is the pre-load fallback.
 function loadSavedStyle(): AnswerStyle | null {
   const saved = localStorage.getItem(STYLE_STORAGE_KEY);
   return saved === "brief" || saved === "comprehensive" ? saved : null;
@@ -80,7 +96,8 @@ export default function App() {
           list = [await createConversation()];
         }
         setConversations(list);
-        setCurrentId(list[0].id);
+        const saved = loadSavedConversationId();
+        setCurrentId((list.find((c) => c.id === saved) ?? list[0]).id);
       } catch (e: unknown) {
         setAppError(
           `無法連線到伺服器：${e instanceof Error ? e.message : String(e)}`,
@@ -88,6 +105,15 @@ export default function App() {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (!currentId) return;
+    try {
+      sessionStorage.setItem(CURRENT_CONV_KEY, currentId);
+    } catch {
+      // storage unavailable — the tab just falls back to the newest chat
+    }
+  }, [currentId]);
 
   const handleNew = async () => {
     try {
@@ -222,7 +248,7 @@ export default function App() {
           </div>
 
           <ChatInput
-            disabled={currentId === null}
+            disabled={currentId === null || isLoading}
             isStreaming={isStreaming}
             style={answerStyle}
             onStyleChange={handleStyleChange}
